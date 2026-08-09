@@ -5,6 +5,21 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "Connect to the camera robot over Bluetooth to steer the gimbal."
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.athleterobot.app",

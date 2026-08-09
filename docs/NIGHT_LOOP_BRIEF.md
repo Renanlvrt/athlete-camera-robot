@@ -10,23 +10,65 @@ agent") that has been working in this repo and is finishing up now.
 
 ---
 
-## 0. THE FIRST RULE: do not start yet
+## 0. THE FIRST RULE: you are running in PARALLEL — stay in your lane
 
-The day agent may still be writing to this repo. **Two agents editing the same files
-simultaneously will corrupt each other's work.**
+**Start immediately. Do not wait for anyone.** The day agent is working at the same time as you,
+in the **same working directory**. You are not taking over from it; you are working beside it.
 
-Before you touch a single file:
+Because you share one filesystem, git branches cannot protect you. **The only thing keeping you
+two from corrupting each other's work is strict file ownership.** This is non-negotiable.
 
-1. Run `git log --oneline -5` and note the newest commit hash.
-2. Run `git status`. **If the working tree is dirty, the day agent is still going.** Wait.
-3. Look for the sentinel file **`docs/DAY_AGENT_DONE.md`**. The day agent writes this as its
-   final commit. **If it does not exist, you must not start implementation work.**
+### 🚫 Files you must NEVER create, edit, or delete — the day agent owns these
 
-While waiting (the user expects roughly a 2-hour gap): **plan.** Read everything in §3, write
-your detailed night plan to `docs/NIGHT_LOOP_PLAN.md`, and commit only that one file. Planning
-is not blocked; editing shared code is.
+```
+src/**                     ← ALL application source, especially src/tracking/
+package.json               ← settled before you start; do not add or bump anything
+package-lock.json
+app.json
+metro.config.js
+jest.config.js  /  jest.setup.js  /  any test config
+docs/DAY_AGENT_*.md
+```
 
-When `docs/DAY_AGENT_DONE.md` exists and `git status` is clean, you own the repo. Begin.
+**If you believe you need a new npm package, you may not install it.** Write the request into
+`docs/NIGHT_DECISIONS.md` and work around it. An unexpected `package.json` edit will collide
+with the other agent mid-write and break both of you.
+
+### ✅ Files you own outright — the day agent will not touch these
+
+```
+.github/**                        ← the CI workflow, and iterating on it
+docs/NIGHT_LOOP_PLAN.md
+docs/NIGHT_DECISIONS.md
+docs/NIGHT_REPORT.md
+testing/MORNING_TEST_PLAN.md
+testing/bench-tests/**
+testing/field-tests/**
+research/**                       ← new findings and RESEARCH_LOG.md rows
+.claude/skills/build-unsigned-ipa/**   ← including implementing the two stub scripts
+```
+
+### Shared files — append-only, never rewrite
+
+`docs/VERIFICATION_REPORT.md` and `testing/REAL_HARDWARE_TEST_LOG.md`: **add a new dated section
+at the top or bottom. Never restructure or reflow existing content.** If you need to correct
+something already there, add a new entry saying so rather than editing in place.
+
+`index.md` files: only edit the ones inside folders you own.
+
+### Working rhythm
+
+- **Commit often and small**, scoped to your own files. `git add` specific paths — never
+  `git add -A`, which would sweep up the other agent's in-progress work.
+- Before each commit: `git status`. If you see modified files outside your lane, **leave them
+  alone** — they are the other agent mid-task.
+- If git reports a conflict or a file changed under you: **stop, do not force anything**, log it
+  in `docs/NIGHT_DECISIONS.md`, and move to another task in your lane.
+- `docs/DAY_AGENT_DONE.md` exists and is **not** a gate anymore. It records what the day agent
+  had verified as of handoff. Read it once for context, then ignore it.
+
+**First 30 minutes:** read §3, then write `docs/NIGHT_LOOP_PLAN.md`. After that, go straight to
+SM-1 — it's the longest pole and it's entirely inside your lane.
 
 ---
 
