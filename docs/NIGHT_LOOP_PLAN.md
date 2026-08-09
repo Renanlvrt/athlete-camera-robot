@@ -27,25 +27,17 @@ hardware result into the latter — no physical hardware in this loop). Off-limi
 ## Execution order
 
 - [x] 0. Gate cleared.
-- [ ] 1. `git push` local commits (day agent's + mine) to `origin/main` — required before any
-      `workflow_dispatch` CI trigger will see current code.
-- [ ] 2. **SM-1** — trigger `.github/workflows/build-ios-unsigned.yml`, iterate on failures
-      (workflow-file-only fixes; never touch `package.json`/`app.json` — log a blocked
-      dependency need in `docs/NIGHT_DECISIONS.md` instead) until the `unsigned-app-ipa`
-      artifact downloads and contains `Payload/*.app`. Record in
-      `docs/VERIFICATION_REPORT.md`, update `.github/workflows/index.md`.
-- [ ] 3. Implement `.claude/skills/build-unsigned-ipa/scripts/trigger_build.py` and
-      `verify_artifact.py` against the now-proven workflow; write
-      `references/common-failures.md` from real failures hit tonight; update `SKILL.md` status
-      + `index.md`.
-- [ ] 4. **SM-5** — write `testing/MORNING_TEST_PLAN.md`: prerequisites checklist (PCA9685 not
-      purchased — flag first), parallelized sequencing, front-loaded high-risk items, per-test
-      steps/expected-result/predicted-failures/time-box/abort-condition, reference existing
-      skills (`ble-ping`, `servo-bounds-test`, `cv-framerate-test`) by path.
-- [ ] 5. **SM-4** — sweep `index.md` files in owned folders for accuracy against tonight's real
-      results; confirm PRD §7 "still genuinely open" items really can't close by research;
-      deepen `research/` only if spare capacity remains.
-- [ ] 6. Last act: `docs/NIGHT_REPORT.md` — honest, scannable, met/partial/not-met.
+- [x] 1. Pushed local commits to `origin/main`.
+- [x] 2. **SM-1** — CI went green on the first attempt, twice (no iteration needed). Recorded in
+      `docs/VERIFICATION_REPORT.md`, `.github/workflows/index.md` updated.
+- [x] 3. Implemented and ran `trigger_build.py` + `verify_artifact.py` for real; wrote
+      `references/common-failures.md`; updated `SKILL.md` + `index.md`.
+- [x] 4. **SM-5** — `testing/MORNING_TEST_PLAN.md` written.
+- [x] 5. **SM-4** — index sweep done; PRD §7 confirmed not closable by research; no spare-capacity
+      research deepening needed (nothing was stale beyond the build-unsigned-ipa status).
+- [x] 6. Last act: `docs/NIGHT_REPORT.md` written.
+
+**All success measures met.** See `docs/NIGHT_REPORT.md` for the full account.
 
 ## Continuous rules
 - `git status` before every commit; leave anything outside my lane alone.
