@@ -18,7 +18,7 @@ sign anything — that's a manual Sideloadly step on the Windows machine, done b
 
 1. Confirm the working tree is committed and pushed — the workflow only runs against what's
    on GitHub, not local uncommitted changes.
-2. Run `scripts/trigger_build.py` to dispatch the `Build unsigned iOS app (for Sideloadly)`
+2. Run `scripts/trigger_build.py` to dispatch the `Build unsigned iOS app (for sideloading)`
    workflow via the GitHub CLI/API and poll for completion.
 3. On success, run `scripts/verify_artifact.py` to download the `unsigned-app-ipa` artifact
    and sanity-check it (non-zero size, contains `Payload/*.app`, `Info.plist` parses).
@@ -39,7 +39,14 @@ sign anything — that's a manual Sideloadly step on the Windows machine, done b
 
 ## Status
 
-Scaffold only — `scripts/trigger_build.py` and `scripts/verify_artifact.py` are not yet
-implemented. Flesh these out against the real workflow file at
-`.github/workflows/build-ios-unsigned.yml` once that workflow has been run successfully at
-least once (see `docs/VERIFICATION_REPORT.md`).
+✅ Implemented and verified end-to-end, 2026-08-09. `.github/workflows/build-ios-unsigned.yml`
+has run green three times now (`docs/VERIFICATION_REPORT.md`). Both scripts were run for real,
+not just syntax-checked:
+- `scripts/trigger_build.py` — dispatched a real build (run `31290028103`), polled it to
+  completion, printed the run URL, exited 0.
+- `scripts/verify_artifact.py` — downloaded the artifact from run `31289641191` for real,
+  confirmed a valid zip, `Payload/athletecamerarobot.app/`, a non-empty executable, and a
+  parseable `Info.plist` (`CFBundleIdentifier=com.athleterobot.app`), exited 0.
+
+See `references/common-failures.md` for the predicted failure modes (none hit yet — all three
+runs succeeded first try) and what to check first if a future run does fail.
