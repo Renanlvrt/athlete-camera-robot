@@ -7,7 +7,7 @@ and for quick agent orientation; Claude Code's actual auto-discovery reads each 
 
 | Skill | Path | Purpose | Status |
 |---|---|---|---|
-| build-unsigned-ipa | `.claude/skills/build-unsigned-ipa/` | Trigger the GitHub Actions macOS build for the unsigned `.ipa` and confirm the artifact downloads. | 🔜 planned — `SKILL.md` written; `scripts/trigger_build.py` is a stub that raises `NotImplementedError`, and `verify_artifact.py` does not exist |
+| build-unsigned-ipa | `.claude/skills/build-unsigned-ipa/` | Trigger the GitHub Actions macOS build for the unsigned `.ipa` and confirm the artifact downloads. | ✅ verified — both scripts run for real 2026-08-09 against a workflow that's gone green 3/3 attempts; see `docs/VERIFICATION_REPORT.md` |
 | ble-ping | `.claude/skills/ble-ping/` | Connect to the micro:bit over BLE and echo a test payload — bench (laptop) first, then phone. | ⚠️ needs verification — scripts written, never run against hardware |
 | servo-bounds-test | `.claude/skills/servo-bounds-test/` | Sweep the gimbal servos to find real mechanical limits; stress-test for BLE brownout. | ⚠️ needs verification — script written, never flashed; PCA9685 not yet purchased |
 | cv-framerate-test | `.claude/skills/cv-framerate-test/` | Measure per-frame processing time on the iPhone 16 — empty processor first, then with the model. | ⚠️ needs verification — screen written, but blocked: requires worklets packages that are not installed |
@@ -24,5 +24,7 @@ build-unsigned-ipa ──► (app on phone) ──► cv-framerate-test ──�
                                     └──► ble-ping ──► servo-bounds-test ──► closed loop
 ```
 
-Nothing has been run yet. `build-unsigned-ipa` is the first domino: until a build lands on the
-phone, none of the other three can produce a result.
+`build-unsigned-ipa` is now proven end-to-end at the CI level (2026-08-09) — the remaining gap
+is installing that artifact on the physical phone, tracked in `testing/MORNING_TEST_PLAN.md`.
+It's still the first domino: none of the other three can produce a hardware result until that
+install happens.

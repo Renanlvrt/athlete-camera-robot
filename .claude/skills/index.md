@@ -13,12 +13,13 @@ does the work, in a separate context window), see `.claude/agents/index.md`.
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
 | `SKILLS_REGISTRY.md` | file | Human-readable table of every skill, plus their dependency order | ✅ verified |
-| `build-unsigned-ipa/` | folder | Trigger + verify the GitHub Actions unsigned-ipa build | 🔜 planned (SKILL.md written, scripts are stubs) |
+| `build-unsigned-ipa/` | folder | Trigger + verify the GitHub Actions unsigned-ipa build | ✅ verified (both scripts run for real 2026-08-09, workflow green 3/3) |
 | `ble-ping/` | folder | Prove the phone↔micro:bit BLE link is alive | ⚠️ needs verification (never run) |
 | `servo-bounds-test/` | folder | Find real gimbal angle limits; stress-test for brownout | ⚠️ needs verification (never run) |
 | `cv-framerate-test/` | folder | Measure per-frame CV time on the real device | ⚠️ needs verification (never run) |
 
-Three of the four are hardware-dependent and therefore **cannot be verified by an agent alone**.
+`build-unsigned-ipa` is CI-verifiable and now verified. The other three are hardware-dependent
+and therefore **cannot be verified by an agent alone**.
 Their procedures end with an explicit report block; results go to `testing/`, never into an
 `index.md` on an agent's say-so.
 
