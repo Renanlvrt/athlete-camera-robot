@@ -6,6 +6,8 @@ re-deriving it. Append a row whenever you research something new; newest at the 
 
 | Date | Topic | Finding file | Confidence | One-line conclusion |
 |---|---|---|---|---|
+| 2026-08-09 | Do the CV packages resolve against expo 57 / RN 0.86 / TS 6? | `computer-vision/frame-processor-stack-v5.md` | **high** (`npm install --dry-run`) | **Yes, all four clean.** worklets 0.10.3, vc-worklets 5.2.2, resizer 5.2.2, fast-tflite 3.0.1. |
+| 2026-08-09 | Which Expo plugin for react-native-ble-plx? | `hardware/microbit-ble-link.md` | **high** (registry + README) | **The library's own built-in plugin.** `@config-plugins/react-native-ble-plx` peers on expo@^49 and fails on 57 — it's obsolete. |
 | 2026-08-09 | Does VisionCamera v5 ship an Expo config plugin? | `phone-integration/expo-cng-constraints.md` | **high** (verified locally) | **No.** v5 has no `app.plugin.js`; permissions go in `ios.infoPlist` directly. A `plugins` entry breaks `expo prebuild`. |
 | 2026-08-09 | Can Windows run `expo prebuild --platform ios`? | `phone-integration/expo-cng-constraints.md` | **high** (verified locally) | **No**, even with `--no-install`. Expo explicitly skips iOS generation off macOS/Linux. |
 | 2026-08-09 | Which frame-processor packages does VisionCamera v5 require? | `computer-vision/frame-processor-stack-v5.md` | high | `react-native-worklets` (SW Mansion) + `react-native-vision-camera-worklets`. **Not** `react-native-worklets-core` — that's v4-era. |

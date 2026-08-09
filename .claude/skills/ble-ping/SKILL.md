@@ -50,9 +50,10 @@ each of 20 pings and a summary.
 
 ## Then the phone test
 
-Only after the bench test passes. Requires `react-native-ble-plx` +
-`@config-plugins/react-native-ble-plx` installed and a fresh build on the phone (a config plugin
-change means a full CI round — see `research/hardware/microbit-ble-link.md`).
+Only after the bench test passes. Requires `react-native-ble-plx` (v3.5.1+, which ships its
+**own** Expo config plugin — do **not** install `@config-plugins/react-native-ble-plx`, it peers
+on Expo 49 and fails here) and a fresh build on the phone, since a config plugin change means a
+full CI round. See `research/hardware/microbit-ble-link.md`.
 
 Same success criterion: send `PING`, receive `ACK:PING`. Compare the latency to the bench number
 — if the phone is dramatically slower, that's an iOS BLE behaviour worth recording, not a bug to

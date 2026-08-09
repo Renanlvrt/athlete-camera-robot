@@ -1,39 +1,64 @@
 # Phone ↔ micro:bit BLE link
 
-- **Researched:** 2026-08-09
-- **Confidence:** high on the library choice; **medium** on the GATT approach; the packet format
-  below is a *proposal*, not yet tested against hardware.
+- **Researched:** 2026-08-09 (corrected same day — see the correction note below)
+- **Confidence:** high on the library choice (verified against the registry and the library's
+  own README); **medium** on the GATT approach; the packet format below is a *proposal*, not yet
+  tested against hardware.
 - **Expires:** On first real hardware test — replace the proposal with what actually worked and
   log it in `testing/`.
 - **Sources:**
-  - https://www.npmjs.com/package/@config-plugins/react-native-ble-plx
-  - https://github.com/dotintent/react-native-ble-plx
-  - https://github.com/expo/config-plugins/blob/main/packages/react-native-ble-plx/README.md
+  - https://github.com/dotintent/react-native-ble-plx/blob/master/README.md
+  - `npm view react-native-ble-plx` — version 3.5.1, peers `react: *`, `react-native: *`
+  - `npm install --dry-run` against this project, 2026-08-09
 
 ## Conclusion
 
-Use **`react-native-ble-plx`** plus **`@config-plugins/react-native-ble-plx`** (the library ships
-no plugin of its own, so the Expo community one is required). On the micro:bit side, expose a
-custom GATT characteristic and write a fixed 4-byte gimbal command to it.
+Use **`react-native-ble-plx`** (v3.5.1) and its **own built-in Expo config plugin**. Do **not**
+install `@config-plugins/react-native-ble-plx`. On the micro:bit side, start with the Nordic UART
+service and write a fixed 4-byte gimbal command to it.
+
+## ⚠️ Correction — the obvious answer is out of date
+
+The first version of this file recommended `@config-plugins/react-native-ble-plx`, because that
+is what search results overwhelmingly say. **It does not work on this project:**
+
+```
+npm error Could not resolve dependency:
+npm error peer expo@"^49" from @config-plugins/react-native-ble-plx@7.0.0
+```
+
+That community plugin peers on **Expo 49**; this project is on **Expo 57**. It exists because
+`react-native-ble-plx` historically shipped no plugin of its own. **It now does** — v3.x
+includes a built-in one, and its README says to reference it directly. The community package is
+effectively obsolete for modern Expo.
+
+This is the second time in one session that the majority answer online was a major version
+behind (the first was the VisionCamera config plugin —
+`../phone-integration/expo-cng-constraints.md`). It's why `CLAUDE.md` §4.1 exists. Checking
+`npm view` and running `npm install --dry-run` took under a minute and settled it definitively.
 
 ## Detail
 
 ### App side
 
 ```bash
-npx expo install react-native-ble-plx @config-plugins/react-native-ble-plx
+npx expo install react-native-ble-plx
 ```
 
 ```json
 {
   "plugins": [
-    ["@config-plugins/react-native-ble-plx", {
+    ["react-native-ble-plx", {
       "modes": ["central"],
       "bluetoothAlwaysPermission": "Connect to the camera robot over Bluetooth"
     }]
   ]
 }
 ```
+
+Verified 2026-08-09: `react-native-ble-plx@3.5.1` alone resolves cleanly against this project's
+dependency tree (`npm install --dry-run`, no ERESOLVE). Confirm the plugin's accepted options
+against the current README before relying on the exact keys above — those were not verified.
 
 The phone is **central**, the micro:bit is **peripheral** — the app scans and connects, not the
 other way round. `isBackgroundEnabled` is not needed: filming happens with the app in the
