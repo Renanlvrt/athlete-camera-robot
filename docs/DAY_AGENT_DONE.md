@@ -1,24 +1,40 @@
-# Day Agent — finished
+# Day Agent — status
 
-**Sentinel file.** Its existence means the day agent has stopped writing to this repo and the
-night agent may begin implementation work. See `docs/NIGHT_LOOP_BRIEF.md` §0.
+**⚠️ This is NOT a gate.** The two agents run in **parallel** in the same working directory.
+Do not wait for anything. See `docs/NIGHT_LOOP_BRIEF.md` §0 for the file-ownership rules that
+keep you from colliding — that is the only thing protecting your work.
 
-- **Finished:** 2026-08-09
-- **Final commit by the day agent:** see `git log` — the commit that added this file.
-- **Working tree state at handoff:** clean, `npm run typecheck` passing with zero errors.
+This file records what the day agent has verified, so you don't redo it.
 
-## Verified before handoff
+- **Last updated:** 2026-08-09
+- **Working tree at that point:** clean, typecheck exit 0, 28/28 tests passing.
+
+## Verified
 
 | Check | Result |
 |---|---|
-| `npm install` | ✅ 470 packages, exit 0 |
-| `npm run typecheck` | ✅ zero errors |
+| `npm install` | ✅ exit 0, 5 CV/BLE packages added, no ERESOLVE |
+| `npm run typecheck` | ✅ exit code 0, zero errors |
+| `npm test` | ✅ **28/28 passing**, 2 suites |
+| `npx expo config --type prebuild` | ✅ evaluates cleanly, plugins resolve |
+| Both config plugins ship `app.plugin.js` | ✅ fast-tflite and ble-plx |
+| No `babel.config.js` needed | ✅ verified in `babel-preset-expo@57.0.5` source |
 | Workflow YAML parses | ✅ 9 steps, `macos-26`, `permissions: contents: read` |
 | Every non-exempt directory has an `index.md` | ✅ |
 | Relative markdown links resolve | ✅ none broken |
 | Skill frontmatter `name` matches folder | ✅ all four |
 | Secret scan of tracked files | ✅ clean |
 | `.gitignore` blocks secret file types | ✅ tested with dummy files |
+
+## Done — do not redo, do not edit these files
+
+- **SM-2 complete.** All five CV/BLE packages installed, `metro.config.js`, `app.json` plugins.
+- **SM-3 complete.** `src/tracking/` (`types.ts`, `selectPrimaryAthlete.ts`,
+  `computeGimbalCorrection.ts`) plus Jest and 28 tests.
+- `.claude/skills/cv-framerate-test/scripts/FrameTimingScreen.tsx` rewritten against the real v5
+  API. **The v4 problem is fixed** — don't "correct" it back.
+
+**Your lane is SM-1 (green CI build), SM-4 (research/docs), SM-5 (morning test plan).**
 
 ## Explicitly NOT verified
 

@@ -75,6 +75,13 @@ athlete-camera-robot/
 │   ├── theme/
 │   │   ├── colors.ts
 │   │   └── index.md
+│   ├── tracking/
+│   │   ├── computeGimbalCorrection.test.ts
+│   │   ├── computeGimbalCorrection.ts
+│   │   ├── index.md
+│   │   ├── selectPrimaryAthlete.test.ts
+│   │   ├── selectPrimaryAthlete.ts
+│   │   └── types.ts
 │   ├── App.tsx
 │   └── index.md
 ├── testing/
@@ -89,7 +96,9 @@ athlete-camera-robot/
 ├── CLAUDE.md
 ├── index.md
 ├── index.ts
+├── jest.config.js
 ├── LICENSE
+├── metro.config.js
 ├── package-lock.json
 ├── package.json
 ├── README.md

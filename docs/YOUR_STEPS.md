@@ -91,16 +91,26 @@ In the **other** Claude Code session, paste exactly this:
 Read docs/NIGHT_LOOP_BRIEF.md in this repo and follow it completely.
 That document is your full brief for tonight's unattended run.
 
-Key points it will tell you, but to set expectations now:
-- Do NOT start implementation until docs/DAY_AGENT_DONE.md exists and `git status` is clean.
-  Until then, only plan, and write your plan to docs/NIGHT_LOOP_PLAN.md.
+Key points, to set expectations now:
+- START IMMEDIATELY. Another Claude is working in this same folder in parallel for about
+  another hour. Do NOT wait for it. Section 0 of the brief lists exactly which files are
+  yours and which are off-limits — obey that strictly, it is the only thing stopping the
+  two of you from corrupting each other's work.
+- Your lane is SM-1 (get a green CI build), SM-4 (research/docs) and SM-5 (the morning
+  hardware test plan). SM-2 and SM-3 are already DONE — do not redo them, and do not touch
+  src/, package.json, app.json, or metro.config.js.
+- Never run `git add -A`. Add only your own files by path.
 - Run with nohup, in acceptEdits permission mode. NOT --dangerously-skip-permissions.
 - When you hit the token limit, wait for the ~5 hour reset and then CONTINUE. Do not stop
   until the success measures in section 2 of the brief are met.
-- I will be away roughly 12-14 hours and cannot answer anything.
+- I will be away roughly 12-14 hours and cannot answer anything. When unsure: decide,
+  write it in docs/NIGHT_DECISIONS.md, keep moving.
 ```
 
 That's it. You're free for the night.
+
+> **Order matters slightly:** do Step 2 (push) *before* Step 3, so the night agent can trigger
+> CI builds from its very first minute. That's its longest task.
 
 ---
 
@@ -218,6 +228,7 @@ your Apple ID. There is no certificate, no provisioning profile, and no API key 
 | What | Command |
 |---|---|
 | Fast local check (seconds) | `npm run typecheck` |
+| Run the unit tests (seconds) | `npm test` |
 | Trigger a build | `gh workflow run build-ios-unsigned.yml` |
 | Watch the build | `gh run watch` |
 | See recent builds | `gh run list --limit 5` |
