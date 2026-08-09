@@ -1,0 +1,51 @@
+# .github/workflows/ — index
+
+The CI workflow that compiles an unsigned iOS `.ipa` on a free GitHub-hosted macOS runner,
+bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §3.2 and
+`research/phone-integration/windows-to-iphone-pipeline.md`.
+
+## Contents
+
+| Name | Type | Responsibility (one line) | Status |
+|------|------|----------------------------|--------|
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ⚠️ needs verification — **never run** |
+
+## Status: never executed
+
+This workflow has never run. It was written on 2026-08-09 against a repo that had no `.github/`
+folder at all, despite `README.md` and the root `index.md` both asserting one existed — see
+`docs/VERIFICATION_REPORT.md`.
+
+**The next person to trigger it must update this file and the verification report with the real
+outcome.** Do not mark it ✅ before then.
+
+### Design decisions worth knowing before you debug it
+
+- **`runs-on: macos-26` is pinned deliberately.** `macos-latest` migrated to macos-26 mid-2026;
+  relying on the floating label means a GitHub-side image rollover can break the build with no
+  change on our side, and the failure will look like a code problem.
+- **The Xcode scheme is derived at runtime**, not hard-coded, via `xcodebuild -list -json`. The
+  scheme name is the most likely failure point, and it **cannot be determined locally** —
+  Windows refuses to run `expo prebuild --platform ios` even with `--no-install` (verified; see
+  `research/phone-integration/expo-cng-constraints.md`). A diagnostic step prints all schemes so
+  one CI round gives the answer rather than a guess-and-retry loop.
+- **The `.ipa` is assembled with `zip`**, not `xcodebuild -exportArchive`. An `.ipa` is just a
+  zip with the `.app` inside `Payload/`; the export step insists on a signing identity, which is
+  exactly what this pipeline avoids.
+- **Signing stays disabled here, always.** If a build fails, do not "fix" it by adding a signing
+  identity — signing happens locally via AltStore with a free Apple ID. That separation is the
+  whole point of the design.
+
+### Likely first failures
+
+1. Scheme name — the diagnostic step exists for this.
+2. `npm ci` failing because `package-lock.json` wasn't committed alongside a dependency change.
+   Reads like an Xcode problem; isn't one.
+3. `expo prebuild` choking on a config plugin. One such bug (VisionCamera v5 shipping no
+   `app.plugin.js`) was already found and fixed locally on 2026-08-09.
+
+## Depends on
+`package.json`, `package-lock.json`, `app.json`, `tsconfig.json`.
+
+## Depended on by
+`.claude/skills/build-unsigned-ipa/`, `README.md`.

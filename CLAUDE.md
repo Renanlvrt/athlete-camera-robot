@@ -71,6 +71,14 @@ Optional, same as any Agent Skill, add only when actually needed:
 - `assets/` — static files the skill produces or depends on (templates, fixtures, sample
   payloads).
 
+**A skill's subfolders (`scripts/`, `references/`, `assets/`) do NOT get their own
+`index.md`.** They are covered by the skill's own `index.md`, which must list their contents
+in its Contents table. This is the one documented exception to §1's "every directory" rule —
+four boilerplate files saying "these are the scripts for the skill above" would make the repo
+harder to read, not easier, which is the opposite of what the index system is for.
+
+Everywhere else, §1 applies with no exceptions.
+
 ### 0.4 `SKILL.md` format (required)
 
 ```markdown
@@ -118,9 +126,13 @@ done until it's been run against the actual iPhone/micro:bit.
 
 ## 1. The Index System (mandatory)
 
-**Every directory in this repo, with no exception, contains an `index.md`.**
-This is how an AI with zero prior context finds its way through hundreds of
-files without reading all of them.
+**Every directory in this repo contains an `index.md`.** This is how an AI with
+zero prior context finds its way through hundreds of files without reading all
+of them.
+
+The single documented exception is a skill's own subfolders (`scripts/`,
+`references/`, `assets/`) — see §0.3. They are covered by the skill's `index.md`.
+Nothing else is exempt; if you think your folder should be, you are wrong.
 
 ### 1.1 What an `index.md` must contain
 
@@ -240,6 +252,7 @@ feature `✅ verified` in any `index.md`:
    check the current upstream documentation for that library — library APIs
    (e.g. Expo SDK version, `react-native-vision-camera`) change often enough
    that memory/training data is not sufficient. Search, don't assume.
+   **Search is not enough on its own** — see §4.1.
 4. Record what you tested and the result in `docs/VERIFICATION_REPORT.md`
    (append, don't overwrite — it's a running log). Include what you did
    **not** test and why (e.g. "no macOS runner available in this sandbox").
@@ -247,13 +260,111 @@ feature `✅ verified` in any `index.md`:
 
 **This is exactly the failure mode this file exists to prevent:** a file
 implemented long ago, under different assumptions, that nobody re-verified,
-quietly breaking the current build. See `docs/VERIFICATION_REPORT.md` for a
-real example found in this repo (the missing `react-native-nitro-modules`
-dependency and the missing Expo config plugin for the camera library).
+quietly breaking the current build. See `docs/VERIFICATION_REPORT.md` for real
+examples found in this repo — including a `.github/workflows/` file that three
+separate documents asserted existed, and which did not.
+
+### 4.1 Tutorials describe whichever version was current when they were written
+
+Rule 3 above says "search, don't assume." That is necessary and **not
+sufficient**, and this repo has a scar to prove it.
+
+An earlier pass added a `plugins: ["react-native-vision-camera", …]` entry to
+`app.json`, citing several independent guides that all agreed it was required.
+They agreed because they were all written for VisionCamera v3/v4, where it was.
+This project is on **v5, which ships no config plugin at all** — the entry made
+`expo prebuild` fail outright. The original `app.json`, before the "fix," was
+already correct.
+
+So, in priority order, when checking a fast-moving native library:
+
+1. **What is actually in `node_modules/`.** Does that file really exist? Does
+   the package really export that? This beats every other source.
+2. **The library's own current docs**, checked for which version they describe.
+3. Tutorials and blog posts — **last**, and assume they are a major version
+   behind unless they say otherwise.
+
+Secondary sources agreeing with each other is not corroboration. It usually
+means they were written in the same year.
 
 ---
 
-## 5. Directory Map
+## 5. Research & Testing Protocol (mandatory)
+
+This project spans three domains — computer vision, phone/build integration, and
+physical hardware — and each fails differently. Section 4 covers what an agent
+can verify by itself. This section covers the two things it **cannot**: facts
+that live outside the repo, and facts that live in the physical world.
+
+### 5.1 `research/` — don't re-derive what's already known
+
+**Before running any web search about CV, the build pipeline, or the hardware,
+read `research/RESEARCH_LOG.md`.** If the topic is there and still fresh, use
+the existing finding.
+
+After doing new research, in the same change:
+1. Write the finding as its own file in `research/<domain>/`, in the format
+   documented in `research/index.md` — **date, confidence, expiry condition,
+   and source URLs are all required.**
+2. Append a row to `research/RESEARCH_LOG.md`.
+3. Add it to that domain's `index.md` Contents table.
+
+A finding without its date and sources is unusable six weeks later, because
+nobody can tell whether it still holds. State confidence honestly: `low` is a
+useful answer, a confident guess is a liability.
+
+### 5.2 `testing/` — physical claims need a human
+
+**An agent may never mark a hardware behaviour as working.** Not the BLE link,
+not servo range, not on-device framerate, not detection quality. An agent did
+not observe those things and cannot.
+
+The loop:
+
+```
+agent writes procedure  →  human runs it on real hardware  →  human reports
+     →  agent records the report in testing/  →  agent updates index.md status
+```
+
+Writing "servo sweep verified" into an `index.md` because the code looks right
+is the single most damaging thing an agent can do in this repo: it converts a
+guess into evidence that later work is built on. If there is no human report,
+the status stays `⚠️ needs verification`. Say what is untested rather than
+quietly implying it passed.
+
+Bench before field — isolate one subsystem before testing the whole robot.
+See `testing/index.md`.
+
+### 5.3 Where each kind of knowledge belongs
+
+Four files get confused with each other constantly. They are not
+interchangeable:
+
+| Knowledge | Goes in |
+|---|---|
+| A **decision** about what this project will build | `docs/PRD.md` |
+| An **external fact** (library API, platform pricing, hardware behaviour) | `research/<domain>/` |
+| A **physical observation** from real hardware | `testing/REAL_HARDWARE_TEST_LOG.md` |
+| **Evidence backing a ✅ tag** (typecheck runs, builds, checks) | `docs/VERIFICATION_REPORT.md` |
+
+Putting a research finding in the PRD makes the spec unstable; putting a
+decision in `research/` hides it from anyone reading the spec.
+
+### 5.4 Subagents
+
+`.claude/agents/` defines three scoped workers: `researcher` (writes
+`research/`), `hardware-tester` (writes `testing/`), and `ux-reviewer`
+(read-only review). See `.claude/agents/index.md` for how these differ from
+skills — the short version is that a **skill** is how a task is done, a
+**subagent** is who does it and in whose context window.
+
+Delegation has a real cost: a subagent starts cold and re-derives context the
+main conversation already has. Use one when work is genuinely separable and
+bulky, not to look organized.
+
+---
+
+## 6. Directory Map
 
 ```
 athlete-camera-robot/
@@ -261,13 +372,32 @@ athlete-camera-robot/
 ├── index.md                  ← root map, read this second
 ├── README.md                 ← human quickstart (build/sign/install steps)
 ├── .claude/
-│   └── skills/                ← Section 0: one folder per reusable skill
+│   ├── skills/                ← Section 0: one folder per reusable skill
+│   │   ├── index.md
+│   │   ├── SKILLS_REGISTRY.md ← human-readable table of every skill, keep in sync
+│   │   └── <skill-name>/
+│   │       ├── SKILL.md
+│   │       ├── index.md
+│   │       └── scripts/
+│   └── agents/                ← Section 5.4: scoped subagents
 │       ├── index.md
-│       ├── SKILLS_REGISTRY.md ← human-readable table of every skill, keep in sync
-│       └── <skill-name>/
-│           ├── SKILL.md
-│           ├── index.md
-│           └── scripts/
+│       ├── researcher.md
+│       ├── hardware-tester.md
+│       └── ux-reviewer.md
+├── research/                  ← Section 5.1: sourced external findings
+│   ├── index.md
+│   ├── RESEARCH_LOG.md        ← check BEFORE searching; append after
+│   ├── computer-vision/
+│   ├── phone-integration/
+│   └── hardware/
+├── testing/                   ← Section 5.2: real-hardware results (human-reported)
+│   ├── index.md
+│   ├── REAL_HARDWARE_TEST_LOG.md
+│   ├── bench-tests/           ← one subsystem isolated
+│   └── field-tests/           ← whole robot, outdoors, real athlete
+├── design/
+│   ├── index.md
+│   └── mockups/               ← direction-setting only; a mockup is NOT authorization
 ├── docs/
 │   ├── index.md
 │   ├── PRD.md                 ← project spec / decisions log — source of truth for scope
@@ -282,13 +412,16 @@ athlete-camera-robot/
 │   └── theme/                  ← shared style tokens
 │       └── index.md
 ├── index.ts                  ← Expo entry point (must stay at repo root)
-├── app.json                  ← Expo config, incl. native config plugins
+├── app.json                  ← Expo config (permissions; see §4.1 re: config plugins)
+├── metro.config.js           ← 🔜 needed before TFLite models can be bundled
 ├── package.json
-├── tsconfig.json
+├── tsconfig.json             ← scoped to src/ + index.ts; .claude/ is excluded
+├── .gitignore                ← ios/ and android/ are NOT tracked (CNG regenerates them)
 └── .github/
     ├── index.md
     └── workflows/
-        └── index.md
+        ├── index.md
+        └── build-ios-unsigned.yml
 ```
 
 `index.ts`, `app.json`, `package.json`, `tsconfig.json`, `package-lock.json`
@@ -298,22 +431,49 @@ otherwise pushes everything into subfolders.
 
 ---
 
-## 6. Growing This Project
+## 7. Growing This Project
 
 When adding the next feature (BLE, on-device person detection, gimbal
 control, etc.):
 
 1. Check `docs/PRD.md` — is it **DECIDED** for the current phase? If it's
    **FUTURE**, stop and confirm with the user first.
-2. Check `.claude/skills/` (Section 0) — is there a discrete, reusable capability inside
+2. Check `research/RESEARCH_LOG.md` (§5.1) — has the external question already
+   been answered? Don't re-search what's already written down.
+3. Check `.claude/skills/` (Section 0) — is there a discrete, reusable capability inside
    this feature (a hardware test, a build step, a standalone check)? If so, use the existing
    skill or create a new one for that piece before writing it inline.
-3. Create a new subfolder under `src/` only if the feature is genuinely a
+4. Create a new subfolder under `src/` only if the feature is genuinely a
    new concern (e.g. `src/ble/`, `src/tracking/`). Otherwise add to an
    existing folder that matches its responsibility.
-4. Write the `index.md` for any new folder *before or alongside* the first
+5. Write the `index.md` for any new folder *before or alongside* the first
    file in it — never leave a folder undocumented even temporarily.
-5. Follow §2 and §3 above without exception.
-6. Update `docs/VERIFICATION_REPORT.md` with what you tested.
-7. If you deprecate something, mark it `❌ deprecated` (§1.2) and grep the
+6. Follow §2 and §3 above without exception.
+7. Update `docs/VERIFICATION_REPORT.md` with what you tested (§4). If any part
+   of it needed real hardware, that result belongs in `testing/` and requires a
+   **human** to have actually run it (§5.2).
+8. If you deprecate something, mark it `❌ deprecated` (§1.2) and grep the
    whole repo for imports of it before deleting.
+
+### 7.1 If you are an AI agent starting fresh on this repo
+
+Read in this order, and stop when you have enough to act:
+
+1. **`CLAUDE.md`** (this file) — the rules. Non-negotiable, not suggestions.
+2. **`index.md`** at the root — the map of what exists and what state it's in.
+3. **`docs/PRD.md`** — what is DECIDED vs. FUTURE. Never build a FUTURE item
+   unless the user asks in the current conversation.
+4. **`research/RESEARCH_LOG.md`** — what's already been investigated.
+5. **`testing/REAL_HARDWARE_TEST_LOG.md`** — what has actually been proven on
+   physical hardware. As of 2026-08-09: **nothing has.**
+6. The `index.md` of whichever folder you're about to touch.
+
+The three habits that matter most here, in order:
+
+- **Don't claim what you haven't verified.** Every status tag needs evidence
+  behind it (§4, §5.2). `⚠️ needs verification` is an honest, useful tag —
+  use it freely. A wrong `✅` actively misleads the next agent, and this repo
+  has already been burned by exactly that.
+- **Update the `index.md` in the same change** (§1.3). A stale index is worse
+  than no index.
+- **Check `node_modules/` before believing a tutorial** (§4.1).

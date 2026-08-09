@@ -7,6 +7,105 @@ entry here to back it up (`CLAUDE.md` §4).
 
 ---
 
+## 2026-08-09 — Phase 0: the repo did not match its own documentation
+
+**Environment:** Windows 11, the developer's actual machine. Node.js + npm available.
+No macOS, no Xcode, no physical device testing performed.
+
+### 1. What was actually on disk vs. what the docs claimed
+
+Audited the real folder before making changes. Several documented components did not exist:
+
+| Documented as existing | Reality |
+|---|---|
+| `.github/workflows/build-ios-unsigned.yml` — asserted by `README.md`, root `index.md`, **and this file's own 2026-08-03 §4 entry** | **No `.github/` folder at all** |
+| `assets/icon.png` + 4 other assets, referenced by `app.json` | **No `assets/` folder** |
+| `node_modules/` — required by the §4 typecheck gate | Absent; the gate had never been runnable here |
+| A git repository (the pipeline is "push → Actions → artifact") | **Not a git repo** |
+| 4 skills in `SKILLS_REGISTRY.md` | Only `build-unsigned-ipa/`, whose scripts are stubs |
+| `docs/PRD.md` as sole spec | A stale 213-line duplicate also sat at root as `robot-camera-tracker-PRD.md` |
+
+The 2026-08-03 entry below describes writing the CI workflow. **That work was done in a
+different environment and never reached this machine.** The entry documenting the fix for a
+missing file was itself describing a file that is missing — the same failure mode one level up.
+Left in place rather than deleted, as the record of what happened.
+
+### 2. `npm install`
+- Command: `npm install --no-audit --no-fund`
+- Result: **succeeded**, 470 packages, exit 0. One deprecation warning (`uuid@7.0.3`, transitive).
+
+### 3. TypeScript check — ✅ **verified**
+- Command: `npm run typecheck` (`tsc --noEmit`)
+- Result: **zero errors.** First honestly-verified claim in this repo.
+- Follow-up: `tsconfig.json` had no `include`/`exclude`, so `tsc` swept up everything including
+  `.claude/skills/*/scripts/`. Scoped it to `index.ts` + `src/**` and excluded `node_modules`,
+  `ios`, `android`, `.claude`. Re-ran: still zero errors. Skill scripts are staging templates,
+  not app source, and some deliberately import packages that aren't installed yet.
+
+### 4. `expo prebuild --platform ios` on Windows — ❌ **does not work**
+- Command: `npx expo prebuild --platform ios --no-install`
+- Result: `⚠️ Skipping generating the iOS native project files. Run npx expo prebuild again from
+  macOS or Linux.` then `CommandError: At least one platform must be enabled when syncing`.
+- `--no-install` does **not** rescue it — Expo refuses the iOS generation step itself off
+  macOS/Linux, not merely the CocoaPods step.
+- **Consequence:** the Xcode scheme name cannot be determined locally. The workflow now derives
+  it at runtime from `xcodebuild -list -json` and prints all schemes in a diagnostic step,
+  rather than hard-coding a guess.
+- Recorded in `research/phone-integration/expo-cng-constraints.md`.
+
+### 5. `app.json` had an invalid config plugin — **a regression introduced by the fix below**
+- The first prebuild attempt failed with:
+  `PluginError: Cannot find module '.../react-native-vision-camera/lib/VisionCamera'` and
+  `No "app.plugin.{js,cjs,mjs,ts,cts,mts}" file was found in "react-native-vision-camera"`.
+- Verified directly: `node_modules/react-native-vision-camera@5.2.1/` contains **no
+  `app.plugin.js`**. VisionCamera v5 ships no Expo config plugin. Confirmed against the current
+  official docs, which show permissions set via `ios.infoPlist` and `android.permissions`
+  **with no plugin entry**.
+- The `plugins` array was added by the 2026-08-03 pass (§3 below), citing several agreeing
+  guides. Those guides were all written for VisionCamera v3/v4, where the plugin *was* required.
+  **The original `app.json`, before that "fix," was already correct for v5.**
+- **Fix applied:** removed the `plugins` array. `ios.infoPlist.NSCameraUsageDescription` and
+  `android.permissions` were already present and are the correct v5 configuration.
+- **This is why `CLAUDE.md` §4.1 now exists.** Multiple secondary sources agreeing is not
+  corroboration — it usually means they were written the same year. Check `node_modules/`.
+- **Not verified end-to-end:** prebuild still cannot run here (item 4), so the *only* thing
+  proven is that this specific plugin error is gone. Whether prebuild then succeeds on macOS is
+  unknown until CI runs.
+
+### 6. Other Phase 0 fixes (typecheck-verified only)
+- Removed `icon` / `web.favicon` / `android.adaptiveIcon` from `app.json` — all five referenced
+  files were absent, which would fail prebuild. Expo has defaults; real branding assets are a
+  separate task. Chose removal over placeholder PNGs deliberately: Expo's icon pipeline fails on
+  a zero-byte or malformed PNG, which is a worse failure than having no icon.
+- Wrote `.github/workflows/build-ios-unsigned.yml`. Pinned `runs-on: macos-26` (GA since Feb
+  2026; `macos-latest` migrated to it mid-2026 — a floating label lets a GitHub-side rollover
+  break the build). YAML validated with a parser: 9 steps, parses clean.
+- `git init` + `.gitignore` (`ios/`, `android/` untracked — CNG regenerates them). Baseline
+  commit made **before** any deletions so nothing was lost.
+- Deleted `robot-camera-tracker-PRD.md`, the stale duplicate. Grepped first: only `TREE.txt`
+  referenced it. Recoverable at commit `976c55c`.
+- Python syntax-checked both `ble-ping` scripts (`py_compile`): clean.
+
+### 7. What was NOT verified — and cannot be, from here
+- **The CI workflow has never run.** Everything about it is `⚠️ needs verification`. The scheme
+  derivation, the archive flags, the `.ipa` packaging — all unproven.
+- **No app has ever been installed on the iPhone.** No screen has been seen on a device.
+- **No hardware exists in the loop yet.** No BLE, no servos. The PCA9685 is still unpurchased
+  (PRD §8).
+- **Every skill except `build-unsigned-ipa` is unrun**, and that one's scripts are stubs.
+- Frame processors **cannot run at all** today: `react-native-worklets` and
+  `react-native-vision-camera-worklets` are not installed (see
+  `research/computer-vision/frame-processor-stack-v5.md`).
+
+### 8. Structure added
+`research/` (sourced findings + `RESEARCH_LOG.md`), `testing/` (human-reported hardware
+results), `.claude/agents/` (researcher, hardware-tester, ux-reviewer), and three new skills.
+`CLAUDE.md` gained §4.1 (version-drift rule) and §5 (Research & Testing Protocol); Directory Map
+and Growing This Project renumbered to §6 and §7, with stale cross-references in `src/index.md`
+and this file corrected.
+
+---
+
 ## 2026-08-03 — Full repo re-verification + reorganization
 
 **Environment:** Linux sandbox, Node.js + npm available, no macOS/Xcode,
@@ -110,11 +209,27 @@ npm/pypi/github (per this environment's egress allowlist).
 ---
 
 ## Open items for the next contributor
-1. Run the CI workflow for real; fix the Xcode scheme name if needed; update
-   `.github/workflows/index.md` and this file.
-2. Once an actual device build is installed on the iPhone 16, confirm the
-   three `useCameraSetup` states are reachable and correct on-device; update
-   `src/hooks/index.md` and `src/screens/index.md` accordingly.
-3. Everything else in `docs/PRD.md` marked FUTURE/STRETCH is still not
-   started — do not begin it without the user explicitly asking, per
-   `CLAUDE.md` §4 and §6.
+
+*(Updated 2026-08-09. Ordered — each unblocks the next.)*
+
+1. **Push to a public GitHub repo.** Nothing downstream can happen first. Public
+   matters: free *unmetered* macOS runner minutes; private bills at 10×.
+2. **Run the CI workflow.** Read the scheme name from the diagnostic step's output
+   (it cannot be determined on Windows — see 2026-08-09 item 4). Update
+   `.github/workflows/index.md` and this file with the real outcome.
+3. **Install on the iPhone 16 via AltStore.** Confirm the three `useCameraSetup`
+   states are reachable on-device; update `src/hooks/index.md` and
+   `src/screens/index.md`. Log it in `testing/REAL_HARDWARE_TEST_LOG.md` — that
+   file currently has **zero** entries.
+4. **Install the frame-processor packages** (`react-native-worklets`,
+   `react-native-vision-camera-worklets`) and run `.claude/skills/cv-framerate-test/`
+   Stage 1 before adding any model. Settle peer conflicts locally first and commit
+   the regenerated lockfile, or CI's `npm ci` fails in a way that looks like an
+   Xcode problem.
+5. **Buy the PCA9685** (PRD §8) before `servo-bounds-test` can run.
+6. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not
+   begin it without the user explicitly asking, per `CLAUDE.md` §4 and §7.
+
+**Standing reminder:** as of 2026-08-09 **nothing in this repo has been run on
+physical hardware.** The only verified claims are `npm install` and
+`npm run typecheck`. Treat every other status tag accordingly.

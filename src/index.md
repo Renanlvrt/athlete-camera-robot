@@ -26,4 +26,4 @@ New concerns (BLE, tracking-lock logic, athlete-count input, etc.) get their
 own sibling folder here (e.g. `src/ble/`, `src/tracking/`) once they exist,
 each with the same `hooks / screens (or components) / index.md` shape. Don't
 pile unrelated logic into `hooks/` or `screens/` just because they already
-exist — see `CLAUDE.md` §6.
+exist — see `CLAUDE.md` §7.

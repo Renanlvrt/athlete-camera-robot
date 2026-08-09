@@ -7,10 +7,22 @@ and for quick agent orientation; Claude Code's actual auto-discovery reads each 
 
 | Skill | Path | Purpose | Status |
 |---|---|---|---|
-| build-unsigned-ipa | `.claude/skills/build-unsigned-ipa/` | Trigger the GitHub Actions macOS build for the unsigned `.ipa` and confirm the artifact downloads successfully. | 🔜 planned — folder scaffolded, `SKILL.md` and `scripts/` not yet written |
-| ble-ping | `.claude/skills/ble-ping/` | Connect to the micro:bit over BLE and send/receive a dummy payload to confirm the link is alive. | 🔜 planned — not yet created |
-| servo-bounds-test | `.claude/skills/servo-bounds-test/` | Sweep the gimbal roll/pitch servos to their limits from the micro:bit side; watch for BLE brownout. | 🔜 planned — not yet created |
-| cv-framerate-test | `.claude/skills/cv-framerate-test/` | Run a dummy TFLite model through a VisionCamera Frame Processor and log per-frame timing against the 16-33ms budget. | 🔜 planned — not yet created |
+| build-unsigned-ipa | `.claude/skills/build-unsigned-ipa/` | Trigger the GitHub Actions macOS build for the unsigned `.ipa` and confirm the artifact downloads. | 🔜 planned — `SKILL.md` written; `scripts/trigger_build.py` is a stub that raises `NotImplementedError`, and `verify_artifact.py` does not exist |
+| ble-ping | `.claude/skills/ble-ping/` | Connect to the micro:bit over BLE and echo a test payload — bench (laptop) first, then phone. | ⚠️ needs verification — scripts written, never run against hardware |
+| servo-bounds-test | `.claude/skills/servo-bounds-test/` | Sweep the gimbal servos to find real mechanical limits; stress-test for BLE brownout. | ⚠️ needs verification — script written, never flashed; PCA9685 not yet purchased |
+| cv-framerate-test | `.claude/skills/cv-framerate-test/` | Measure per-frame processing time on the iPhone 16 — empty processor first, then with the model. | ⚠️ needs verification — screen written, but blocked: requires worklets packages that are not installed |
 
 Status tags match `CLAUDE.md` Section 1.2 (`✅ verified`, `⚠️ needs verification`,
 `❌ deprecated`, `🔜 planned`).
+
+## Dependency order
+
+These are not independent — each is a gate for the next:
+
+```
+build-unsigned-ipa ──► (app on phone) ──► cv-framerate-test ──► tracking work
+                                    └──► ble-ping ──► servo-bounds-test ──► closed loop
+```
+
+Nothing has been run yet. `build-unsigned-ipa` is the first domino: until a build lands on the
+phone, none of the other three can produce a result.

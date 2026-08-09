@@ -36,3 +36,7 @@ yarn-error.*
 # Local env
 .env
 .env.local
+
+# Python bytecode (skill scripts)
+__pycache__/
+*.py[cod]

@@ -98,18 +98,35 @@ This was the trickiest constraint to solve and is worth preserving exactly:
      Mac of the developer's own needed) and runs `expo prebuild` then `xcodebuild archive` with
      code signing **disabled** — this step never touches any paid-account-gated Apple service.
   3. The workflow exports a raw **unsigned `.ipa`** file as a downloadable build artifact.
-  4. On the Windows PC, **Sideloadly** (a free Windows/Mac tool) signs that unsigned `.ipa` using
-     the developer's ordinary **free Apple ID** and installs it on the iPhone directly over USB.
-- **Trade-off of this free path:** a free Apple ID's signature expires every **7 days**, so the
-  app needs to be re-signed via Sideloadly roughly weekly (a ~2 minute task: plug in phone, click
-  Start). There's also a 3-app sideload limit on the phone at once, which is a non-issue here
-  (only one app is being installed). This is considered acceptable for active development.
+  4. On the Windows PC, **AltStore Classic + AltServer** (free) signs that unsigned `.ipa` using
+     the developer's ordinary **free Apple ID** and installs it on the iPhone. First install is
+     over USB; after that AltServer refreshes it over Wi-Fi automatically.
+- **Trade-off of this free path:** a free Apple ID's signature expires every **7 days**.
+  AltServer re-signs in the background whenever the phone and the Windows PC are on the same
+  network, so this is normally invisible — but it does mean the PC has to be on periodically.
+  There's also a 3-app sideload limit, a non-issue here (one app).
+- **Sideload tool — DECIDED 2026-08-09: AltStore Classic.** Chosen over Sideloadly (the original
+  choice) because the developer is at the robot near-daily and the automatic Wi-Fi refresh
+  removes a recurring manual USB chore. Sideloadly still works and is the documented fallback;
+  SideStore is a second fallback. All three are $0.
+  - **Naming trap:** searching "AltStore" surfaces a €1.50 subscription. That is **AltStore PAL**,
+    a different product — an EU-only alternative app marketplace under the DMA (and free now
+    anyway). **AltStore Classic + AltServer on Windows has always been free.**
+  - Full comparison and cost audit: `research/phone-integration/windows-to-iphone-pipeline.md`.
+- **The repo must be PUBLIC.** Public repos get free *unmetered* GitHub Actions minutes including
+  macOS runners. Private repos bill macOS at a **10× multiplier** against a limited allowance,
+  which a handful of 15–20 minute iOS builds can exhaust. This is the assumption the whole no-Mac
+  strategy rests on.
 - **Upgrade path (optional, later):** if the weekly re-sign becomes annoying, or the app needs to
   be shared/distributed to someone else for testing, paying for the $99/year Apple Developer
   Program removes the 7-day expiry (signs for a full year) and unlocks TestFlight. **Not needed
   for MVP.**
-- The exact GitHub Actions workflow YAML has not been written yet — this is an implementation
-  task for later, not part of this planning doc.
+- **Status 2026-08-09:** the workflow now exists at `.github/workflows/build-ios-unsigned.yml`
+  (pinned to `macos-26`). It has **never been run.** Note that `expo prebuild --platform ios`
+  **cannot run on Windows at all**, even with `--no-install` — verified, see
+  `research/phone-integration/expo-cng-constraints.md`. Nothing about the iOS native build can be
+  checked locally; CI is the only feedback loop, at ~15–20 min per round. This is why
+  `npm run typecheck` matters so much: it's the only gate that runs in seconds.
 
 ### 3.3 Target device
 - Developer's phone: **iPhone 16** (non-Pro). No LiDAR — CV approach must work from plain RGB
@@ -214,13 +231,35 @@ implemented unless the user asks:
 
 ---
 
-## 7. Open Questions (not yet decided — flag to user if relevant work comes up)
-- Exact BLE GATT message format/protocol between phone and micro:bit.
-- Which specific on-device person-detection model/library to use in the frame processor.
-- Exact wiring split of the 3 servos across the moto:bit's native headers vs. the new PCA9685
-  (electrically either works; not yet chosen).
-- Logic for *which* athlete becomes the "locked" one when several are visible.
-- GitHub Actions workflow YAML for the unsigned-build pipeline (needs to be written).
+## 7. Open Questions
+
+*(Reviewed 2026-08-09. Items marked **PROVISIONAL** have a research-backed proposal but have not
+been tested against hardware — treat them as decided-enough to build on, and revisit if reality
+disagrees.)*
+
+### Still genuinely open
+- **Logic for *which* athlete becomes the "locked" one** when several are visible. §4.2 says keep
+  this loose for MVP; start with largest bounding-box area.
+- **Whether detection range is adequate** for a distant athlete with a small quantized model.
+  This is the most likely thing to force a rethink of §4.1, and it can only be answered by a
+  field test — not by research.
+- **Power/brownout behaviour** under real servo load. Explicitly *not* resolvable by research;
+  see `research/hardware/power-brownout-risk.md` and the `servo-bounds-test` skill.
+
+### Closed since the last review
+- ~~Which on-device person-detection model/library~~ → **`react-native-fast-tflite`** with a
+  quantized COCO SSD-MobileNet-V2 / EfficientDet-Lite0, CoreML delegate enabled. Apple's Vision
+  framework was considered and **rejected**: no maintained npm frame-processor plugin exists, so
+  it would require hand-written Swift that Expo's CNG deletes on every prebuild — unworkable with
+  no Mac. See `research/computer-vision/person-detection-model-choice.md`.
+- ~~GitHub Actions workflow YAML~~ → written, never run. See §3.2.
+- **PROVISIONAL — BLE message format:** fixed 4-byte packet
+  `[roll_hi, roll_lo, pitch_hi, pitch_lo]`, two big-endian uint16 angles in tenths of a degree.
+  Fixed width so the receiver never handles partial messages. Over the Nordic UART service to
+  start — simplest thing that can be debugged. Rate-limit sends to **10–20 Hz**, never per-frame.
+  See `research/hardware/microbit-ble-link.md`.
+- **PROVISIONAL — servo wiring split:** put **all three servos on the PCA9685**. One code path,
+  one timing model, one power rail. See `research/hardware/pca9685-servo-control.md`.
 
 ---
 

@@ -1,34 +1,94 @@
 athlete-camera-robot/
+├── .claude/
+│   ├── agents/
+│   │   ├── hardware-tester.md
+│   │   ├── index.md
+│   │   ├── researcher.md
+│   │   └── ux-reviewer.md
+│   └── skills/
+│       ├── ble-ping/
+│       │   ├── scripts/
+│       │   │   ├── bench_ping.py
+│       │   │   └── microbit_ble_echo.py
+│       │   ├── index.md
+│       │   └── SKILL.md
+│       ├── build-unsigned-ipa/
+│       │   ├── scripts/
+│       │   │   └── trigger_build.py
+│       │   ├── index.md
+│       │   └── SKILL.md
+│       ├── cv-framerate-test/
+│       │   ├── scripts/
+│       │   │   └── FrameTimingScreen.tsx
+│       │   ├── index.md
+│       │   └── SKILL.md
+│       ├── servo-bounds-test/
+│       │   ├── scripts/
+│       │   │   └── microbit_servo_sweep.py
+│       │   ├── index.md
+│       │   └── SKILL.md
+│       ├── index.md
+│       └── SKILLS_REGISTRY.md
+├── .github/
+│   ├── workflows/
+│   │   ├── build-ios-unsigned.yml
+│   │   └── index.md
+│   └── index.md
 ├── design/
 │   ├── mockups/
 │   │   ├── index.md
 │   │   └── live-tracking-screen-mockup.html
 │   └── index.md
 ├── docs/
+│   ├── index.md
 │   ├── PRD.md
-│   ├── VERIFICATION_REPORT.md
-│   └── index.md
+│   └── VERIFICATION_REPORT.md
+├── research/
+│   ├── computer-vision/
+│   │   ├── frame-budget.md
+│   │   ├── frame-processor-stack-v5.md
+│   │   ├── index.md
+│   │   └── person-detection-model-choice.md
+│   ├── hardware/
+│   │   ├── index.md
+│   │   ├── microbit-ble-link.md
+│   │   ├── pca9685-servo-control.md
+│   │   └── power-brownout-risk.md
+│   ├── phone-integration/
+│   │   ├── expo-cng-constraints.md
+│   │   ├── index.md
+│   │   └── windows-to-iphone-pipeline.md
+│   ├── index.md
+│   └── RESEARCH_LOG.md
 ├── src/
 │   ├── hooks/
 │   │   ├── index.md
 │   │   └── useCameraSetup.ts
 │   ├── screens/
 │   │   ├── CameraPreviewScreen.tsx
+│   │   ├── index.md
 │   │   ├── NoCameraDeviceScreen.tsx
-│   │   ├── PermissionRequiredScreen.tsx
-│   │   └── index.md
+│   │   └── PermissionRequiredScreen.tsx
 │   ├── theme/
 │   │   ├── colors.ts
 │   │   └── index.md
 │   ├── App.tsx
 │   └── index.md
-├── CLAUDE.md
-├── LICENSE
-├── README.md
+├── testing/
+│   ├── bench-tests/
+│   │   └── index.md
+│   ├── field-tests/
+│   │   └── index.md
+│   ├── index.md
+│   └── REAL_HARDWARE_TEST_LOG.md
+├── .gitignore
 ├── app.json
+├── CLAUDE.md
 ├── index.md
 ├── index.ts
+├── LICENSE
 ├── package-lock.json
 ├── package.json
-├── robot-camera-tracker-PRD.md
+├── README.md
+├── TREE.txt
 └── tsconfig.json
