@@ -26,8 +26,8 @@ Treat every `⚠️` tag below as literal. See `docs/VERIFICATION_REPORT.md`
 | `CLAUDE.md` | file | Rules every contributor (AI or human) must follow | ✅ verified |
 | `README.md` | file | Human quickstart: get code onto a machine, build, sign, install | ⚠️ needs verification (steps never executed end-to-end) |
 | `docs/` | folder | Project spec, decisions, and the verification log — see `docs/index.md` | ✅ verified |
-| `research/` | folder | Sourced external findings per domain; check `RESEARCH_LOG.md` before searching — see `research/index.md` | ✅ verified |
-| `testing/` | folder | Human-reported results from real hardware — see `testing/index.md` | ✅ verified (structure; no results yet) |
+| `research/` | folder | Sourced external findings per domain; check `RESEARCH_LOG.md` before searching — see `research/index.md` | ✅ written & sourced (see that file — ✅ means something different there) |
+| `testing/` | folder | Human-reported results from real hardware — see `testing/index.md` | ⚠️ structure only — **zero results recorded** |
 | `design/` | folder | UI mockups for direction-setting — see `design/index.md` | ✅ verified |
 | `src/` | folder | All application source loaded by `index.ts` — see `src/index.md` | ⚠️ needs verification (typechecks; never run on a device) |
 | `.claude/` | folder | Skills (`skills/`) and subagents (`agents/`) — see each folder's `index.md` | ⚠️ needs verification (no skill has been run) |

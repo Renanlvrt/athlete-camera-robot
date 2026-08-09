@@ -26,6 +26,13 @@ concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege. This workflow only reads the repo and uploads an artifact —
+# it never needs to write to the repo, publish packages, or mint tokens. On a
+# PUBLIC repo the default token grant is worth narrowing explicitly, so a
+# compromised dependency in the build can't push commits.
+permissions:
+  contents: read
+
 jobs:
   build:
     # Pinned deliberately. `macos-latest` began pointing at macos-26 mid-2026;
@@ -54,19 +61,37 @@ jobs:
       - name: Expo prebuild (generate native iOS project)
         run: npx expo prebuild --platform ios --clean
 
-      # DIAGNOSTIC — remove once the scheme name is confirmed and hard-coded below.
-      # The scheme name is the #1 predicted failure of this workflow. Rather than
-      # guess-and-retry at ~20 min per round, this prints the real answer.
+      # DIAGNOSTIC — the scheme name is the #1 predicted failure of this workflow,
+      # and it CANNOT be determined locally: Windows refuses to run
+      # `expo prebuild --platform ios` even with --no-install (verified; see
+      # research/phone-integration/expo-cng-constraints.md). Printing it here means
+      # one CI round gives the answer instead of a guess-and-retry loop.
       - name: List available Xcode schemes
         run: |
           ls -la ios/*.xcodeproj/xcshareddata/xcschemes/ || true
-          cd ios && xcodebuild -list
+          cd ios && xcodebuild -list -workspace *.xcworkspace
 
       - name: Archive (code signing disabled)
         run: |
+          # `bash -e` alone does NOT catch a failure on the left side of a pipe,
+          # and the archive command below is piped. Without pipefail a failed
+          # xcodebuild exits 0 here and detonates later in "Package unsigned .ipa"
+          # with a confusing "no such file" — exactly the misleading-failure mode
+          # documented in .github/workflows/index.md.
+          set -o pipefail
           cd ios
-          SCHEME=$(xcodebuild -list -json | python3 -c "import sys,json; print(json.load(sys.stdin)['project']['schemes'][0])")
+
+          # Read the scheme from the WORKSPACE explicitly. `expo prebuild` emits both
+          # an .xcodeproj and an .xcworkspace; a bare `xcodebuild -list` is ambiguous
+          # when both are present, and the JSON top-level key is "workspace" (not
+          # "project") when it resolves one. Must match the archive invocation below.
+          SCHEME=$(xcodebuild -list -json -workspace *.xcworkspace \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['workspace']['schemes'][0])")
           echo "Using scheme: $SCHEME"
+
+          # No xcpretty: it is not guaranteed to be preinstalled on macos-26, and a
+          # missing formatter would read as an Xcode failure. Raw output is verbose
+          # but searchable in the Actions log.
           xcodebuild archive \
             -workspace *.xcworkspace \
             -scheme "$SCHEME" \
@@ -77,8 +102,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            EXPANDED_CODE_SIGN_IDENTITY="" \
-            | xcpretty || exit 1
+            EXPANDED_CODE_SIGN_IDENTITY=""
 
       # An .ipa is just a zip with the .app inside a Payload/ directory.
       # We assemble it by hand because `xcodebuild -exportArchive` insists on a

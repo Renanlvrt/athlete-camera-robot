@@ -20,9 +20,12 @@ UART blocks are the documented fallback; record which one worked in
 testing/REAL_HARDWARE_TEST_LOG.md so the next person doesn't retry the dead end.
 """
 
-from microbit import display, Image, sleep
-import radio  # noqa: F401  (imported to fail fast if the build lacks it)
+from microbit import display, sleep
 
+# Deliberately NOT importing `radio`: research/hardware/microbit-ble-link.md
+# records that MakeCode's Bluetooth and radio extensions conflict, and that the
+# BLE stack already eats a large share of the micro:bit's limited flash. Whether
+# BLE is available is answered by the `bluetooth` import below, not by `radio`.
 try:
     import bluetooth
 except ImportError:  # pragma: no cover - depends on the flashed runtime

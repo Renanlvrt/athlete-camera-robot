@@ -39,6 +39,14 @@ Confidence means: **high** = confirmed against primary/official docs or verified
 Library ecosystems here (Expo, VisionCamera) move fast — a finding older than ~3 months near a
 major version boundary should be treated as suspect.
 
+## What ✅ means *in this folder specifically*
+
+`CLAUDE.md` §1.2 defines `✅ verified` as "has been run or tested." Research findings are not
+run, so that definition doesn't transfer. **Here, `✅` means "written, sourced, and dated" — a
+different axis from §1.2's.** The trustworthiness of a finding is carried by its own
+**Confidence** field (high/medium/low), not by the status tag in the table below. A finding can
+be `✅` in this table and `low` confidence in its own header; that's not a contradiction.
+
 ## Contents
 
 | Name | Type | Responsibility (one line) | Status |

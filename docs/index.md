@@ -10,6 +10,12 @@ This folder contains no code.
 |---|---|---|---|
 | `PRD.md` | file | Full project spec — hardware, software, CV, control-logic decisions and roadmap. Source of truth for scope. | ✅ verified (kept in sync with the original planning conversation) |
 | `VERIFICATION_REPORT.md` | file | Running, append-only log of what was actually tested (commands run, results), so "✅ verified" tags elsewhere are trustworthy | ✅ verified |
+| `YOUR_STEPS.md` | file | **Start here if you're the human.** Copy-paste commands for GitHub setup, AltStore install, and the morning hardware session | ⚠️ needs verification (steps never executed) |
+| `NIGHT_LOOP_BRIEF.md` | file | Complete brief handed to a second Claude instance for an unattended overnight run (2026-08-09) | ✅ verified |
+| `DAY_AGENT_DONE.md` | file | Sentinel — its existence tells the night agent the repo is safe to edit | ✅ verified |
+
+Files the night agent is expected to create: `NIGHT_LOOP_PLAN.md`, `NIGHT_DECISIONS.md`,
+`NIGHT_REPORT.md`, and `testing/MORNING_TEST_PLAN.md`.
 
 ## Not to be confused with
 

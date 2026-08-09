@@ -40,9 +40,12 @@ athlete-camera-robot/
 │   │   └── live-tracking-screen-mockup.html
 │   └── index.md
 ├── docs/
+│   ├── DAY_AGENT_DONE.md
 │   ├── index.md
+│   ├── NIGHT_LOOP_BRIEF.md
 │   ├── PRD.md
-│   └── VERIFICATION_REPORT.md
+│   ├── VERIFICATION_REPORT.md
+│   └── YOUR_STEPS.md
 ├── research/
 │   ├── computer-vision/
 │   │   ├── frame-budget.md
