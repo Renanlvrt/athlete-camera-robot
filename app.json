@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "athlete-camera-robot",
+    "slug": "athlete-camera-robot",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "$(PRODUCT_NAME) needs access to your Camera to detect and track the athlete being filmed.",
+          "enableMicrophonePermission": false
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.athleterobot.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "The camera is used to detect and track the athlete being filmed."
+      }
+    },
+    "android": {
+      "package": "com.athleterobot.app",
+      "permissions": ["android.permission.CAMERA"],
+      "predictiveBackGestureEnabled": false
+    }
+  }
+}

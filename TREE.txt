@@ -1,0 +1,34 @@
+athlete-camera-robot/
+├── design/
+│   ├── mockups/
+│   │   ├── index.md
+│   │   └── live-tracking-screen-mockup.html
+│   └── index.md
+├── docs/
+│   ├── PRD.md
+│   ├── VERIFICATION_REPORT.md
+│   └── index.md
+├── src/
+│   ├── hooks/
+│   │   ├── index.md
+│   │   └── useCameraSetup.ts
+│   ├── screens/
+│   │   ├── CameraPreviewScreen.tsx
+│   │   ├── NoCameraDeviceScreen.tsx
+│   │   ├── PermissionRequiredScreen.tsx
+│   │   └── index.md
+│   ├── theme/
+│   │   ├── colors.ts
+│   │   └── index.md
+│   ├── App.tsx
+│   └── index.md
+├── CLAUDE.md
+├── LICENSE
+├── README.md
+├── app.json
+├── index.md
+├── index.ts
+├── package-lock.json
+├── package.json
+├── robot-camera-tracker-PRD.md
+└── tsconfig.json
