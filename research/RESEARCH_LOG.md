@@ -1,0 +1,19 @@
+# Research Log
+
+Dated index of every research topic investigated for this project. **Check this before running
+new web searches** — if the topic is here and still fresh, read the linked file instead of
+re-deriving it. Append a row whenever you research something new; newest at the top.
+
+| Date | Topic | Finding file | Confidence | One-line conclusion |
+|---|---|---|---|---|
+| 2026-08-09 | Does VisionCamera v5 ship an Expo config plugin? | `phone-integration/expo-cng-constraints.md` | **high** (verified locally) | **No.** v5 has no `app.plugin.js`; permissions go in `ios.infoPlist` directly. A `plugins` entry breaks `expo prebuild`. |
+| 2026-08-09 | Can Windows run `expo prebuild --platform ios`? | `phone-integration/expo-cng-constraints.md` | **high** (verified locally) | **No**, even with `--no-install`. Expo explicitly skips iOS generation off macOS/Linux. |
+| 2026-08-09 | Which frame-processor packages does VisionCamera v5 require? | `computer-vision/frame-processor-stack-v5.md` | high | `react-native-worklets` (SW Mansion) + `react-native-vision-camera-worklets`. **Not** `react-native-worklets-core` — that's v4-era. |
+| 2026-08-09 | On-device person detection: Apple Vision vs TFLite? | `computer-vision/person-detection-model-choice.md` | high | **TFLite via `react-native-fast-tflite`.** Apple Vision has no npm frame-processor plugin, so it would mean hand-written Swift that CNG deletes on every prebuild. |
+| 2026-08-09 | Which frame resizer works with v5? | `computer-vision/frame-processor-stack-v5.md` | medium | `react-native-vision-camera-resizer` (Nitro/GPU). The older `vision-camera-resize-plugin` still pins `worklets-core`. |
+| 2026-08-09 | Are GitHub Actions macOS runners still free? | `phone-integration/windows-to-iphone-pipeline.md` | high | **Yes — free and unmetered on public repos.** Private bills at a 10× multiplier. |
+| 2026-08-09 | Which macOS runner image / Xcode version? | `phone-integration/windows-to-iphone-pipeline.md` | high | `macos-26` is GA, Xcode 26.6 default. Pin it explicitly; `macos-latest` moved to it mid-2026. |
+| 2026-08-09 | Free sideloading: Sideloadly vs AltStore vs SideStore? | `phone-integration/windows-to-iphone-pipeline.md` | high | **AltStore Classic + AltServer** — free, auto-refreshes over Wi-Fi. The paid tier is AltStore *PAL*, a different EU-only product. |
+| 2026-08-09 | BLE from Expo to micro:bit — which library? | `hardware/microbit-ble-link.md` | high | `react-native-ble-plx` + `@config-plugins/react-native-ble-plx` (the community plugin, since ble-plx itself ships none). |
+| 2026-08-09 | PCA9685 servo control from micro:bit | `hardware/pca9685-servo-control.md` | medium | I2C over Qwiic. **Timing is in centiseconds, not milliseconds** — the classic footgun. |
+| 2026-08-09 | Power/brownout risk with 3 servos + 2 motors | `hardware/power-brownout-risk.md` | **low — open question** | Not resolvable by research. Must be measured on the real robot; see the skill `servo-bounds-test`. |

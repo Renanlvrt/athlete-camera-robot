@@ -1,0 +1,100 @@
+# Builds an UNSIGNED iOS .ipa on a free GitHub-hosted macOS runner.
+#
+# Why this exists: EAS Build requires a paid Apple Developer account to produce a
+# real-device (arm64) build. Plain `xcodebuild` does not — compiling has never been
+# the paid part, *signing* is. So we compile here with signing disabled, ship the
+# raw .ipa as an artifact, and sign it locally on Windows with a free Apple ID via
+# AltStore/AltServer. See docs/PRD.md §3.2.
+#
+# Cost: $0. Public repos get free, UNMETERED Actions minutes including macOS.
+# If this repo ever goes private, macOS bills at a 10x multiplier — see the cost
+# audit in research/phone-integration/.
+
+name: Build unsigned iOS app (for sideloading)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'design/**'
+      - 'research/**'
+      - 'testing/**'
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Pinned deliberately. `macos-latest` began pointing at macos-26 mid-2026;
+    # relying on the floating label means a runner-image rollover can break the
+    # build with no change on our side. Bump this on purpose, never by surprise.
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` fails hard if package-lock.json and package.json disagree.
+      # If this step fails, the cause is almost always a dependency added without
+      # committing the regenerated lockfile — not an Xcode problem.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Expo prebuild (generate native iOS project)
+        run: npx expo prebuild --platform ios --clean
+
+      # DIAGNOSTIC — remove once the scheme name is confirmed and hard-coded below.
+      # The scheme name is the #1 predicted failure of this workflow. Rather than
+      # guess-and-retry at ~20 min per round, this prints the real answer.
+      - name: List available Xcode schemes
+        run: |
+          ls -la ios/*.xcodeproj/xcshareddata/xcschemes/ || true
+          cd ios && xcodebuild -list
+
+      - name: Archive (code signing disabled)
+        run: |
+          cd ios
+          SCHEME=$(xcodebuild -list -json | python3 -c "import sys,json; print(json.load(sys.stdin)['project']['schemes'][0])")
+          echo "Using scheme: $SCHEME"
+          xcodebuild archive \
+            -workspace *.xcworkspace \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/app.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            | xcpretty || exit 1
+
+      # An .ipa is just a zip with the .app inside a Payload/ directory.
+      # We assemble it by hand because `xcodebuild -exportArchive` insists on a
+      # signing identity, which is exactly what we're avoiding.
+      - name: Package unsigned .ipa
+        run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -r "$RUNNER_TEMP/app.xcarchive/Products/Applications/"*.app "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry unsigned-app.ipa Payload
+          ls -lh unsigned-app.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-app-ipa
+          path: ${{ runner.temp }}/unsigned-app.ipa
+          if-no-files-found: error
+          retention-days: 14
