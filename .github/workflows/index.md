@@ -8,16 +8,24 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ⚠️ needs verification — **never run** |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully twice |
 
-## Status: never executed
+## Status: ✅ verified green, 2026-08-09
 
-This workflow has never run. It was written on 2026-08-09 against a repo that had no `.github/`
-folder at all, despite `README.md` and the root `index.md` both asserting one existed — see
+Triggered twice via `gh workflow run` / an automatic `push` trigger:
+- Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
+- Run `31289641191` (commit `3e379da`, current `HEAD`, all 5 CV/BLE native packages linked in):
+  success in 7m39s.
+
+Both produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid zip,
+`Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
+`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on both
+runs** — none of the "likely first failures" predicted below actually occurred. Full detail in
 `docs/VERIFICATION_REPORT.md`.
 
-**The next person to trigger it must update this file and the verification report with the real
-outcome.** Do not mark it ✅ before then.
+**Not verified by this**: whether the app actually launches/runs correctly on a physical
+iPhone — that's `⚠️ needs verification`, human-only, tracked in
+`testing/MORNING_TEST_PLAN.md`.
 
 ### Design decisions worth knowing before you debug it
 

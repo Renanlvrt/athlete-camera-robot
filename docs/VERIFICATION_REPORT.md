@@ -270,6 +270,48 @@ npm/pypi/github (per this environment's egress allowlist).
 
 ---
 
+## 2026-08-09 (night) — CI workflow ran green, first attempt, twice
+
+**Environment:** Windows 11, developer's machine, `gh` CLI authenticated as `Renanlvrt`.
+Repo is public and pushed (`origin/main` at `3e379da` at the time of these runs).
+
+### `.github/workflows/build-ios-unsigned.yml` — ✅ verified
+Two runs, both succeeded on the first attempt — none of the predicted failure modes in
+`.github/workflows/index.md` ("likely first failures": scheme detection, missing lockfile
+commit, config-plugin errors) actually occurred.
+
+1. **Run `31288776388`** — triggered automatically by the day agent's `push` of commit
+   `1176a1e` (before CV/BLE native packages were installed). `success` in **5m19s**.
+2. **Run `31289641191`** — triggered by me via `gh workflow run build-ios-unsigned.yml` against
+   commit `3e379da` (current `HEAD`, all 5 CV/BLE native packages — `react-native-worklets`,
+   `react-native-vision-camera-worklets`, `react-native-vision-camera-resizer`,
+   `react-native-fast-tflite`, `react-native-ble-plx` — linked in). `success` in **7m39s**. This
+   is the meaningful one: it proves `expo prebuild --platform ios` and `xcodebuild archive`
+   both handle the native-module set the day agent installed, on the actual macOS runner.
+
+For each, downloaded the `unsigned-app-ipa` artifact via `gh run download <id> --name
+unsigned-app-ipa --repo Renanlvrt/athlete-camera-robot` and inspected it directly (not just
+trusted the green checkmark):
+- `unzip -l` shows a well-formed `Payload/athletecamerarobot.app/` bundle in both — 76 files,
+  ~38.8MB uncompressed for the `HEAD` build (vs. a much smaller bundle for the pre-deps build,
+  consistent with the new native frameworks being linked).
+- `Payload/athletecamerarobot.app/athletecamerarobot` (the Mach-O executable) is present, 12MB
+  in the `HEAD` build.
+- `Payload/athletecamerarobot.app/Info.plist` extracted and confirmed via `file` to be a valid
+  **Apple binary property list** (not corrupt/truncated).
+- `Frameworks/` contains `React.framework`, `hermesvm.framework`, `ExpoModulesCore.framework`,
+  etc. — expected shape for an Expo/RN app.
+
+**Not verified by this, and cannot be from here:** whether the `.ipa` actually installs and
+launches on the physical iPhone 16 via AltStore, whether the camera permission flow works, and
+whether the CV/BLE native modules actually initialize at runtime (compiling and linking cleanly
+is necessary but not sufficient — first-run crashes from missing Info.plist usage-description
+strings or native init issues are a known category and are exactly what
+`testing/MORNING_TEST_PLAN.md` is for). Keep `⚠️ needs verification` on all of that until a
+human reports it.
+
+---
+
 ## Open items for the next contributor
 
 *(Updated 2026-08-09. Ordered — each unblocks the next.)*

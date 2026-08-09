@@ -10,7 +10,7 @@ Not responsible for: signing or installing the app (that happens locally via Alt
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `workflows/` | folder | CI workflow definitions — see `workflows/index.md` | ⚠️ needs verification |
+| `workflows/` | folder | CI workflow definitions — see `workflows/index.md` | ✅ verified — ran green twice, 2026-08-09 |
 
 ## Depends on
 `package.json` / `package-lock.json` (the workflow runs `npm ci`), `app.json` (it runs
