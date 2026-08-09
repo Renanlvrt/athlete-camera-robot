@@ -7,6 +7,68 @@ entry here to back it up (`CLAUDE.md` §4).
 
 ---
 
+## 2026-08-09 (later) — Dependencies installed, test framework added, tracking logic verified
+
+**Environment:** Windows 11, developer's machine. No macOS, no device, no robot hardware.
+
+### 1. CV + BLE dependencies installed — ✅ verified
+`npm install` of the five packages whose peer ranges were dry-run checked earlier:
+`react-native-worklets@0.10.3`, `react-native-vision-camera-worklets@5.2.2`,
+`react-native-vision-camera-resizer@5.2.2`, `react-native-fast-tflite@3.0.1`,
+`react-native-ble-plx@3.5.1`. Result: **`added 16 packages`, exit 0**, no ERESOLVE, no
+`--legacy-peer-deps`. `package-lock.json` committed in the same change.
+
+### 2. `metro.config.js` created — ⚠️ needs verification
+Adds `'tflite'` to `resolver.assetExts`. Cannot be verified without bundling on a device;
+the file itself is trivial and matches the documented fast-tflite requirement.
+
+### 3. `app.json` config plugins — ✅ resolve, ⚠️ effect unverified
+Added `react-native-fast-tflite` (`enableCoreMLDelegate: true`) and `react-native-ble-plx`.
+- Confirmed **both packages ship an `app.plugin.js`** — the exact check that would have caught
+  the VisionCamera bug in the earlier entry.
+- `npx expo config --type prebuild` **evaluates cleanly** (this is the step that previously threw
+  `PluginError`), and the ble-plx plugin's Android permissions appear in the output:
+  `BLUETOOTH`, `BLUETOOTH_ADMIN`, `BLUETOOTH_CONNECT`.
+- `NSBluetoothAlwaysUsageDescription` does **not** appear in `expo config` output. Investigated:
+  `withBluetoothPermissions.js` applies it via `withInfoPlist`, which is a **mod** — mods run
+  during real `expo prebuild`, not during config evaluation. The `bluetoothAlwaysPermission`
+  option key was read from the plugin source and is correct. **Not a bug**; recorded so nobody
+  re-investigates.
+
+### 4. No `babel.config.js` is required — ✅ verified by reading the source
+Checked whether `react-native-worklets` needs a Babel plugin registered. It does, **but
+`babel-preset-expo@57.0.5` adds it automatically** when the package is installed —
+`node_modules/expo/node_modules/babel-preset-expo/build/configs/expo.js:110`:
+*"Automatically add worklets or reanimated plugin when package is installed."*
+Adding a hand-written `babel.config.js` would be redundant and risks diverging from the preset.
+
+### 5. Test framework added — ✅ verified
+There was **no test framework in this project at all**. Added `jest` + `jest-expo` +
+`@types/jest`, `jest.config.js` scoped to `src/**`, and `npm test` / `npm run test:watch`.
+`tsconfig.json` needed `"types": ["jest"]` — without it `tsc` failed on every `describe`/`it`.
+
+### 6. `src/tracking/` — ✅ verified (logic only)
+Pure, dependency-free control logic: `types.ts`, `selectPrimaryAthlete.ts`,
+`computeGimbalCorrection.ts`.
+
+- **`npm test` → 28/28 passing**, 2 suites.
+- **`npm run typecheck` → exit code 0**, zero errors (checked the exit code explicitly, not just
+  the absence of output).
+
+Tests cover: confidence gating at the boundary, largest-area selection by area rather than
+width/height, deterministic tie-breaking (a non-deterministic tie would oscillate the gimbal
+between two athletes), input purity, the roll/pitch **sign convention** in all four directions
+(the vertical axis inverts, and this is the most likely bug in the file), linear gain scaling,
+centre-vs-corner offset, per-axis deadband, `maxStep` clamping in both directions, NaN/Infinity
+rejection, finiteness across a 121-point sweep, and a closed-loop **convergence** simulation
+asserting the error never grows.
+
+**What this does NOT prove:** the tuning constants (`gain: 30`, `deadband: 0.05`, `maxStep: 5`)
+are conservative guesses that have never touched hardware. The convergence test uses a crude
+"1° ≈ 0.01 frame widths" stand-in for real servo geometry. Both need a field test.
+
+---
+
 ## 2026-08-09 — Phase 0: the repo did not match its own documentation
 
 **Environment:** Windows 11, the developer's actual machine. Node.js + npm available.

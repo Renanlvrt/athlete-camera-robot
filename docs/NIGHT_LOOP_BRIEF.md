@@ -102,7 +102,34 @@ The user is pushing the repo to **public** GitHub before they leave, so this is 
 - Then implement the two stub scripts in `.claude/skills/build-unsigned-ipa/scripts/`
   (`trigger_build.py`, `verify_artifact.py`) against the workflow you now know works.
 
-### ✅ SM-2 — CV + BLE packages installed, typecheck green
+### ✔️ SM-2 — **ALREADY DONE by the day agent. Skip it.**
+### ✔️ SM-3 — **ALREADY DONE by the day agent. Skip it.**
+
+Both landed before you started. Do **not** redo them, and do **not** modify the files involved.
+
+**SM-2 done:** all five packages installed and committed (`added 16 packages`, no ERESOLVE).
+`metro.config.js` created with `'tflite'` in `assetExts`. `app.json` has the fast-tflite
+(`enableCoreMLDelegate: true`) and ble-plx plugins; both verified to ship `app.plugin.js`, and
+`npx expo config --type prebuild` evaluates cleanly. **No `babel.config.js` is needed** —
+`babel-preset-expo@57.0.5` auto-adds the worklets plugin when the package is installed
+(verified in the preset source). `npm run typecheck` exits 0.
+
+**SM-3 done:** `src/tracking/` exists with `types.ts`, `selectPrimaryAthlete.ts`, and
+`computeGimbalCorrection.ts` — pure functions, no native imports. Jest + jest-expo added,
+`npm test` → **28/28 passing**. Covers sign convention, deadband, `maxStep` clamping, NaN
+rejection, tie determinism, and a closed-loop convergence simulation.
+
+**Your remaining work is SM-1, SM-4, and SM-5** — all in your lane, all unblocked.
+
+> If you have spare capacity after those, the best next targets (still in your lane) are:
+> implementing the two stub scripts in `.claude/skills/build-unsigned-ipa/scripts/` against the
+> workflow you'll have proven, and deepening `research/`. **Do not** start `src/ble/` or extend
+> `src/tracking/` — that's the day agent's lane and it'll collide.
+
+<details>
+<summary>Original SM-2 text (kept for reference — already satisfied)</summary>
+
+### ~~SM-2 — CV + BLE packages installed, typecheck green~~
 Peer compatibility is **already verified** by dry-run (see
 `research/computer-vision/frame-processor-stack-v5.md`). These resolve clean:
 `react-native-worklets@0.10.3`, `react-native-vision-camera-worklets@5.2.2`,
@@ -135,6 +162,13 @@ dependency change** (CI runs `npm ci`, which fails hard on a mismatched lockfile
 **This is the highest-value work you can do**, because pure functions are the only part of the
 whole control loop that is fully verifiable on Windows with no hardware. Test edge cases hard:
 zero boxes, one box, ties, boxes at frame edges, clamp boundaries, NaN inputs.
+
+</details>
+
+**Note on `FrameTimingScreen.tsx`:** the v4-API problem mentioned in the collapsed text above
+**has been fixed** — it was rewritten against the real v5 API and verified against the `.d.ts`
+files in `node_modules`. §4 below still applies as reference, but there is nothing to correct.
+`useAthleteDetection.ts` is **not** written yet and belongs to the day agent — leave it.
 
 ### ✅ SM-4 — Research and docs airtight
 Close what's closable in `docs/PRD.md` §7. Keep `research/` and `RESEARCH_LOG.md` current.

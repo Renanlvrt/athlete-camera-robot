@@ -12,6 +12,7 @@ rendering lives in `screens/`, shared style values live in `theme/`, and
 | `App.tsx` | file | Composition root — switches on `useCameraSetup()`'s status and renders exactly one screen. No business logic, no styling. | ✅ verified |
 | `hooks/` | folder | State and side-effect logic, no JSX — see `hooks/index.md` | ✅ verified |
 | `screens/` | folder | Full-screen React components, no business logic — see `screens/index.md` | ✅ verified |
+| `tracking/` | folder | Pure decision logic: who to follow, how far to move the gimbal. Unit-tested, no hardware needed — see `tracking/index.md` | ✅ verified |
 | `theme/` | folder | Shared style tokens (colors, and future spacing/typography) — see `theme/index.md` | ✅ verified |
 
 ## Depends on
