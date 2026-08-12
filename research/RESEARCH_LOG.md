@@ -6,6 +6,7 @@ re-deriving it. Append a row whenever you research something new; newest at the 
 
 | Date | Topic | Finding file | Confidence | One-line conclusion |
 |---|---|---|---|---|
+| 2026-08-12 | Concrete downloadable TFLite model file + output format for person detection | `computer-vision/person-detection-model-asset.md` | **high** across the board — URL/format fetched directly, person-index confirmed by reading `labelmap.txt` byte-for-byte | `coco_ssd_mobilenet_v1_1.0_quant_2018_06_29.zip` from `storage.googleapis.com` (2.7MB, verified live). 4 outputs, NMS baked in, boxes `[ymin,xmin,ymax,xmax]` normalized, **person = class index 0**. Bundled at `assets/models/person-detection.tflite`. |
 | 2026-08-09 | Do the CV packages resolve against expo 57 / RN 0.86 / TS 6? | `computer-vision/frame-processor-stack-v5.md` | **high** (`npm install --dry-run`) | **Yes, all four clean.** worklets 0.10.3, vc-worklets 5.2.2, resizer 5.2.2, fast-tflite 3.0.1. |
 | 2026-08-09 | Which Expo plugin for react-native-ble-plx? | `hardware/microbit-ble-link.md` | **high** (registry + README) | **The library's own built-in plugin.** `@config-plugins/react-native-ble-plx` peers on expo@^49 and fails on 57 — it's obsolete. |
 | 2026-08-09 | Does VisionCamera v5 ship an Expo config plugin? | `phone-integration/expo-cng-constraints.md` | **high** (verified locally) | **No.** v5 has no `app.plugin.js`; permissions go in `ios.infoPlist` directly. A `plugins` entry breaks `expo prebuild`. |

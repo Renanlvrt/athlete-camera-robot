@@ -8,9 +8,8 @@ no BLE. That is deliberate and it is the point of this folder: it makes the enti
 algorithm **unit-testable on Windows with no hardware attached** — the only part of the robot's
 behaviour that can be proven correct before the robot exists.
 
-Not responsible for: getting frames (`src/hooks/`), running the model (future
-`useAthleteDetection`), sending bytes to the robot (future `src/ble/`), or drawing anything
-(`src/screens/`).
+Not responsible for: getting frames or running the model (`src/hooks/useAthleteDetection.ts`),
+sending bytes to the robot (future `src/ble/`), or drawing anything (`src/screens/`).
 
 ## Contents
 
@@ -19,12 +18,18 @@ Not responsible for: getting frames (`src/hooks/`), running the model (future
 | `types.ts` | file | Shared vocabulary: `PersonBox`, `GimbalCorrection`, `GimbalTuning`, tuning defaults | ✅ verified |
 | `selectPrimaryAthlete.ts` | file | Every detection → the one athlete to lock onto | ✅ verified |
 | `computeGimbalCorrection.ts` | file | Locked athlete's offset → roll/pitch deltas (proportional, clamped) | ✅ verified |
+| `computeTrackingReadout.ts` | file | Locked athlete's offset → human-readable distance/bearing + `isCentered`, for the on-screen UI | ✅ verified |
+| `decodeDetections.ts` | file | Raw SSD-MobileNet-V1 output tensors → `PersonBox[]`, filtered to the person class | ✅ verified |
 | `selectPrimaryAthlete.test.ts` | file | 12 tests: confidence gating, largest-area, tie determinism, purity | ✅ verified |
 | `computeGimbalCorrection.test.ts` | file | 16 tests: sign convention, proportionality, deadband, step cap, NaN, convergence | ✅ verified |
+| `computeTrackingReadout.test.ts` | file | 12 tests: bearing convention in all 4 directions, buffer boundary, NaN/Infinity, purity | ✅ verified |
+| `decodeDetections.test.ts` | file | 12 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity | ✅ verified |
 
-**Verified how:** `npm test` → 28/28 passing; `npm run typecheck` → zero errors. Recorded in
-`docs/VERIFICATION_REPORT.md`. Note these tags cover the *logic*; the tuning **constants** are
-unvalidated guesses until a field test (see below).
+**Verified how:** `npm test` → 52/52 passing across this folder (59/59 repo-wide);
+`npm run typecheck` → zero errors. Recorded in `docs/VERIFICATION_REPORT.md`. Note these tags
+cover the *logic*; the tuning **constants** and `PERSON_CLASS_ID`/tensor-order assumptions behind
+`decodeDetections.ts` are unvalidated against the real model running on real hardware until a
+field test (see below).
 
 ## Design decisions worth knowing
 
@@ -53,5 +58,6 @@ watching the real gimbal.
 Nothing. No imports outside this folder — that isolation is what makes it testable.
 
 ## Depended on by
-Nothing yet. Future `useAthleteDetection.ts` will feed it, and future `src/ble/` will transmit
-its output.
+`src/hooks/useAthleteDetection.ts` (`decodeDetections.ts`), `src/screens/TrackingOverlay.tsx`
+(`selectPrimaryAthlete.ts`, `computeTrackingReadout.ts`). Future `src/ble/` will transmit
+`computeGimbalCorrection.ts`'s output.

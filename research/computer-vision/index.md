@@ -12,6 +12,7 @@ and `docs/PRD.md` §5), or camera setup (that's `src/hooks/useCameraSetup.ts`).
 |------|------|----------------------------|--------|
 | `frame-processor-stack-v5.md` | file | Exact package set VisionCamera v5 needs for frame processors, and the v4→v5 traps | ✅ verified |
 | `person-detection-model-choice.md` | file | Why TFLite via `react-native-fast-tflite`, not Apple's Vision framework | ✅ verified |
+| `person-detection-model-asset.md` | file | The concrete downloadable `.tflite` file URL, its output tensor format, and the person class index | ✅ verified |
 | `frame-budget.md` | file | What "fast enough" means here and how it's measured | ⚠️ needs verification (budget is arithmetic; real numbers need the device) |
 
 ## Depends on
