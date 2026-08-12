@@ -8,19 +8,22 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully twice |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 4 times |
 
-## Status: ✅ verified green, 2026-08-09
+## Status: ✅ verified green, 4/4 runs, most recently 2026-08-12
 
-Triggered twice via `gh workflow run` / an automatic `push` trigger:
+Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
-- Run `31289641191` (commit `3e379da`, current `HEAD`, all 5 CV/BLE native packages linked in):
-  success in 7m39s.
+- Run `31289641191` (commit `3e379da`, all 5 CV/BLE native packages linked in): success in 7m39s.
+- Run `31290028103` (same commit, dispatched to test `trigger_build.py` itself): success.
+- Run `31641145475` (commit `b039ba3` — adds `expo-dev-client` + the bundled TFLite model asset):
+  success. Artifact grew to 14.1 MB (from 11.1 MB), consistent with the new dev-client native
+  code and the 4.18 MB model file now bundled.
 
-Both produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid zip,
-`Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
-`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on both
-runs** — none of the "likely first failures" predicted below actually occurred. Full detail in
+All four produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
+zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
+`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all four
+runs** — none of the "likely first failures" predicted below have occurred yet. Full detail in
 `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical

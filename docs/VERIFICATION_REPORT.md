@@ -312,28 +312,81 @@ human reports it.
 
 ---
 
+## 2026-08-12 — Stage 4: person detection + tracking overlay implemented, CI-verified
+
+**Environment:** Windows 11, developer's machine. `gh` authenticated as `Renanlvrt`. No macOS, no
+iPhone testing performed this session — see "Not verified" below.
+
+### 1. Sourced and bundled a real TFLite model — ✅ verified
+Downloaded `coco_ssd_mobilenet_v1_1.0_quant_2018_06_29.zip` directly from
+`storage.googleapis.com` (not trusted from a tutorial), unzipped it, and read `labelmap.txt`
+byte-for-byte to confirm `detection_classes[i] == 0` means "person" (previously medium-confidence
+from indirect reasoning; now directly confirmed). `detect.tflite` (4.18 MB) copied to
+`assets/models/person-detection.tflite`. Full detail: `research/computer-vision/person-detection-model-asset.md`.
+
+### 2. New pure logic in `src/tracking/` — ✅ verified
+`decodeDetections.ts` (raw SSD output tensors → `PersonBox[]`, 12 tests) and
+`computeTrackingReadout.ts` (offset → distance/bearing/`isCentered`, 12 tests). `npm test` →
+**59/59 passing** (up from 28), `npm run typecheck` → zero errors.
+
+### 3. `src/screens/frameLayout.ts` — ✅ verified
+Pure `'cover'`-fit geometry mapping a frame-normalised box to view pixels (7 tests). Documented,
+NOT yet proven on hardware: assumes `Frame.orientation === 'up'`, the common case for this
+portrait-locked app — see the file's own doc comment for what to check first if the on-device
+overlay looks rotated.
+
+### 4. `src/hooks/useAthleteDetection.ts` + `src/screens/TrackingOverlay.tsx` — ⚠️ needs verification
+Wired against the real v5 API (checked against `node_modules/**/*.d.ts`, not memory): `useResizer`
+(scaleMode `'stretch'`, 300×300 uint8 RGB), `useTensorflowModel` with the `core-ml` delegate,
+`model.runSync()` inside the `useFrameOutput` worklet, counting/state updates done on the JS
+thread via `runOnJS` (never inside the worklet itself) — same pattern already proven in
+`.claude/skills/cv-framerate-test/scripts/FrameTimingScreen.tsx`. `tsc --noEmit` passes. **Cannot
+be verified further without the real device** — no simulator can exercise a real camera feed or
+CoreML delegate.
+
+### 5. Added `expo-dev-client` — ✅ installs clean
+`npx expo install expo-dev-client` → `expo-dev-client@~57.0.11`, no ERESOLVE. Purpose: after the
+one CI build below, further UI-only iteration can happen via `expo start --dev-client` and a
+Wi-Fi reload instead of a ~20-minute CI round-trip per change.
+
+### 6. CI build + artifact — ✅ verified
+Run `31641145475` (commit `b039ba3`) succeeded on the first attempt. Downloaded and inspected via
+`.claude/skills/build-unsigned-ipa/scripts/verify_artifact.py`: 14.1 MB `.ipa`, valid
+`Payload/athletecamerarobot.app/`, 12.2 MB executable, parseable `Info.plist`. Grew from the prior
+11.1 MB build, consistent with `expo-dev-client`'s native code plus the 4.18 MB bundled model.
+
+### What this does NOT prove — stated plainly
+- **No on-device inference has run.** Model loading, the CoreML delegate, and `model.runSync()`
+  timing are all unverified — this needs `.claude/skills/cv-framerate-test/` on the real iPhone.
+- **The overlay's coordinate mapping is unverified.** If the box appears offset or rotated from
+  the actual person, check `src/hooks/useAthleteDetection.ts`'s orientation assumption first.
+- **`PERSON_CLASS_ID = 0` and the tensor-order assumptions in `decodeDetections.ts`** are
+  confirmed against the shipped `labelmap.txt` and TF's own docs, but never exercised against the
+  model's *actual runtime output* — a real detection is the only thing that fully proves this.
+- **The `CENTER_BUFFER` (0.08) constant** in `computeTrackingReadout.ts` is an unvalidated
+  starting guess, same status as `defaultGimbalTuning`.
+
 ## Open items for the next contributor
 
-*(Updated 2026-08-09. Ordered — each unblocks the next.)*
+*(Updated 2026-08-12. Ordered — each unblocks the next. Items 1–2 from the prior version of this
+list are done: the repo is pushed and public, and CI has run green 4/4 times.)*
 
-1. **Push to a public GitHub repo.** Nothing downstream can happen first. Public
-   matters: free *unmetered* macOS runner minutes; private bills at 10×.
-2. **Run the CI workflow.** Read the scheme name from the diagnostic step's output
-   (it cannot be determined on Windows — see 2026-08-09 item 4). Update
-   `.github/workflows/index.md` and this file with the real outcome.
-3. **Install on the iPhone 16 via AltStore.** Confirm the three `useCameraSetup`
-   states are reachable on-device; update `src/hooks/index.md` and
-   `src/screens/index.md`. Log it in `testing/REAL_HARDWARE_TEST_LOG.md` — that
-   file currently has **zero** entries.
-4. **Install the frame-processor packages** (`react-native-worklets`,
-   `react-native-vision-camera-worklets`) and run `.claude/skills/cv-framerate-test/`
-   Stage 1 before adding any model. Settle peer conflicts locally first and commit
-   the regenerated lockfile, or CI's `npm ci` fails in a way that looks like an
-   Xcode problem.
-5. **Buy the PCA9685** (PRD §8) before `servo-bounds-test` can run.
+1. **Install the current build on the iPhone 16 via AltStore** (`docs/YOUR_STEPS.md` has the full
+   walkthrough) and confirm the app launches at all. This is still the single biggest unknown —
+   nothing app-level has ever touched the real device.
+2. **Run `.claude/skills/cv-framerate-test/` Stage 1 and Stage 2** — or just watch
+   `TrackingOverlay`'s status line go from "Loading model…" to a real reading — to confirm the
+   model loads, the CoreML delegate engages, and a real person in frame produces a box roughly
+   where they're standing. If the box is offset or rotated, check the `Frame.orientation`
+   assumption flagged in `src/hooks/useAthleteDetection.ts` and `src/screens/frameLayout.ts`.
+3. Once installed once, **use `expo start --dev-client`** for further UI-only iteration
+   (readout layout, colors, `CENTER_BUFFER` tuning) instead of a new CI build per change.
+4. **Log whatever happens in `testing/REAL_HARDWARE_TEST_LOG.md`** — that file currently has
+   **zero** entries. Only a human can write to it (`CLAUDE.md` §5.2).
+5. **Buy the PCA9685** (PRD §8) before `servo-bounds-test` or any gimbal work can run.
 6. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not
    begin it without the user explicitly asking, per `CLAUDE.md` §4 and §7.
 
-**Standing reminder:** as of 2026-08-09 **nothing in this repo has been run on
-physical hardware.** The only verified claims are `npm install` and
-`npm run typecheck`. Treat every other status tag accordingly.
+**Standing reminder:** as of 2026-08-12, CI has proven the app **builds**; nothing has proven it
+**runs** — no app has been installed on the iPhone, no BLE link has been made, no servo has
+moved, no model has run inference on a real frame. Treat every `⚠️` tag accordingly.
