@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
-import { useFrameOutput, type CameraFrameOutput } from 'react-native-vision-camera';
+import {
+  useFrameOutput,
+  type CameraFrameOutput,
+  type CameraPosition,
+} from 'react-native-vision-camera';
 import { runOnJS } from 'react-native-worklets';
 import { useResizer } from 'react-native-vision-camera-resizer';
 import { useTensorflowModel } from 'react-native-fast-tflite';
@@ -45,12 +49,17 @@ import type { PersonBox } from '../tracking/types';
  * box, since `frameLayout.ts`'s `'cover'`-fit math amplifies any aspect-ratio
  * error into a large positioning error.
  *
- * FRONT CAMERA: `frame.isMirrored` is passed straight through to
- * `decodeDetections`'s `isMirrored` option, which flips each box's `x`
- * before it's ever stored in state — every downstream consumer
- * (`src/tracking/`, `src/screens/`) sees already-correct, un-mirrored
- * coordinates and doesn't need to know which camera produced them. See
- * `src/hooks/useCameraSetup.ts` for the front/back toggle this supports.
+ * FRONT CAMERA: the caller passes `cameraPosition` — the RESOLVED
+ * `CameraDevice.position` once known (falling back to the requested
+ * `facing` before the device resolves; see `src/App.tsx`), never
+ * `Frame.isMirrored`. This is a deliberate correction: an earlier version
+ * used `Frame.isMirrored`, but a real on-device report showed a mirrored
+ * box on the BACK camera — a state `Frame.isMirrored` should never report
+ * true for, per VisionCamera's own docs. Rather than debug a native flag
+ * with no way to log its real device-side value, `cameraPosition` is
+ * simple, deterministic, and fully within this app's own control: back
+ * camera is defined to never mirror, front camera always does. See
+ * `docs/VERIFICATION_REPORT.md`'s 2026-08-13 entries for the full history.
  */
 
 const MODEL_INPUT_SIZE = 300;
@@ -68,7 +77,13 @@ export interface AthleteDetectionResult {
   readonly frameAspectRatio: number | undefined;
 }
 
-export function useAthleteDetection(): AthleteDetectionResult {
+/**
+ * @param cameraPosition Which physical camera is (or will be) active —
+ *   `setup.device.position` once resolved, else the requested `facing`. Only
+ *   `'front'` triggers mirror-correction; every other value (`'back'`,
+ *   `'external'`, `'unspecified'`) is treated as not mirrored.
+ */
+export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDetectionResult {
   const plugin = useTensorflowModel(require('../../assets/models/person-detection.tflite'), [
     'core-ml',
   ]);
@@ -85,11 +100,13 @@ export function useAthleteDetection(): AthleteDetectionResult {
   const [frameAspectRatio, setFrameAspectRatio] = useState<number | undefined>(undefined);
   const hasSetAspectRatio = useRef(false);
 
+  const isMirrored = cameraPosition === 'front';
+
   const publishDetections = useCallback(
-    (rawBoxes: number[], rawClasses: number[], rawScores: number[], isMirrored: boolean) => {
+    (rawBoxes: number[], rawClasses: number[], rawScores: number[]) => {
       setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores, { isMirrored }));
     },
-    [],
+    [isMirrored],
   );
 
   const publishFrameSize = useCallback((width: number, height: number, isRotated: boolean) => {
@@ -139,7 +156,7 @@ export function useAthleteDetection(): AthleteDetectionResult {
       const rawBoxes = Array.from(new Float32Array(outputs[0]));
       const rawClasses = Array.from(new Float32Array(outputs[1]));
       const rawScores = Array.from(new Float32Array(outputs[2]));
-      runOnJS(publishDetections)(rawBoxes, rawClasses, rawScores, frame.isMirrored);
+      runOnJS(publishDetections)(rawBoxes, rawClasses, rawScores);
 
       frame.dispose();
     },

@@ -25,7 +25,11 @@ import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
  */
 export default function App() {
   const setup = useCameraSetup();
-  const detection = useAthleteDetection();
+  // Prefer the RESOLVED device's own reported position (ground truth) once
+  // known; fall back to the requested facing before that — see
+  // useAthleteDetection.ts's doc comment for why this replaced Frame.isMirrored.
+  const cameraPosition = setup.status === 'ready' ? setup.device.position : setup.facing;
+  const detection = useAthleteDetection(cameraPosition);
   const recording = useVideoRecording();
 
   switch (setup.status) {

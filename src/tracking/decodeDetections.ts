@@ -47,13 +47,15 @@ export interface DecodeDetectionsOptions {
   /** Which class id counts as "person" for this model. */
   readonly personClassId?: number;
   /**
-   * True when the source frame is mirrored (the front/selfie camera) — see
-   * `Frame.isMirrored` in `react-native-vision-camera`. When set, each box's
+   * True when the source frame is mirrored (the front/selfie camera). The
+   * caller decides this — `src/hooks/useAthleteDetection.ts` derives it from
+   * the resolved `CameraDevice.position`, deliberately NOT from
+   * `Frame.isMirrored` (see that file's doc comment for why: a real
+   * on-device report showed a mirrored box on the back camera, which
+   * `Frame.isMirrored` should never report true for). When set, each box's
    * `x` is flipped (`1 - x - width`) so downstream code always sees
    * coordinates in the same left-right sense as what's actually displayed,
-   * regardless of which physical camera produced the frame. Front-camera
-   * frames come out of the model still mirrored — this is not a rare edge
-   * case, it's the normal case for that camera.
+   * regardless of which physical camera produced the frame.
    */
   readonly isMirrored?: boolean;
 }

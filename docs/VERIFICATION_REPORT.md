@@ -571,6 +571,45 @@ tests). `npm run typecheck` → zero errors.
   was written — see `.github/workflows/index.md` for the outcome once known. Still no phone
   install of any of this round's changes.
 
+---
+
+## 2026-08-13 (night) — Mirroring driven by CameraDevice.position, not Frame.isMirrored
+
+**Environment:** Windows 11, developer's machine. New, more precise developer report: the
+Phone Test #1 build was confirmed to be using the **back** camera (settling the open question
+from the previous entry), and the box appeared at the horizontally-mirrored position relative to
+the actual person — not merely oversized. `Frame.isMirrored` should never report `true` for a
+back camera per VisionCamera's own docs, so continuing to key mirror-correction off that flag
+was the wrong foundation regardless of whether it happened to test "correct" in isolation.
+
+### Fix — ⚠️ needs verification (deterministic by construction, but the real payoff is on-device)
+`useAthleteDetection.ts` now takes `cameraPosition: CameraPosition` as a parameter instead of
+reading `frame.isMirrored` inside the worklet. `src/App.tsx` computes it as
+`setup.status === 'ready' ? setup.device.position : setup.facing` — the actual resolved
+`CameraDevice.position` (ground truth) once known, falling back to the requested `facing` before
+that (doesn't matter either way; no frames flow until ready). `isMirrored = cameraPosition ===
+'front'` is now a single deterministic line, fully within the app's own control, with no
+dependency on a native per-frame flag whose real device behavior was never actually observed.
+`decodeDetections.ts`'s `isMirrored` option and its 4 existing tests are unchanged — only the
+*source* of the boolean changed, not the decode math itself.
+
+**Why this counts as "cleaner and more accurate" (the developer's own framing) rather than just
+another guess:** `CameraDevice.position` is not a heuristic — it's the literal identity of the
+camera object the app itself resolved via `useCameraDevice(facing)`. There's no scenario where
+the app doesn't know which camera it asked for and got. This removes an entire class of
+uncertainty (whatever `Frame.isMirrored`'s real value was doing) rather than trading one guess
+for another.
+
+### Tests + typecheck — ✅ verified
+`npm test` → 73/73 unchanged (no pure-logic changes, only the caller). `npm run typecheck` →
+zero errors. CI run triggered by this commit's push — see `.github/workflows/index.md`.
+
+### What this does NOT prove
+- Whether this actually fixes the reported mirrored-box symptom on the real back camera — that's
+  exactly what the next phone install needs to check first, before anything else in this batch.
+- Nothing about the still-open frame-coordinate-rotation gap for a 90°-rotated frame — a
+  *different* concern from mirroring, and still unaddressed.
+
 ## Open items for the next contributor
 
 *(Updated 2026-08-13 evening. Ordered — each unblocks the next. Per the developer's explicit
