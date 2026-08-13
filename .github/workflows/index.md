@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 4 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 5 times |
 
-## Status: ✅ verified green, 4/4 runs, most recently 2026-08-12
+## Status: ✅ verified green, 5/5 runs, most recently 2026-08-13 (Phone Test #1 build)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -19,6 +19,9 @@ Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31641145475` (commit `b039ba3` — adds `expo-dev-client` + the bundled TFLite model asset):
   success. Artifact grew to 14.1 MB (from 11.1 MB), consistent with the new dev-client native
   code and the 4.18 MB model file now bundled.
+- Run `31731682846` (commit `920674e` — Phone Test #1: orientation fix, badge z-order/clamping
+  fix, structured webcam testing): success, artifact still 14.1 MB (no app-source changes this
+  round, test tooling + docs only).
 
 All four produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
 zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
