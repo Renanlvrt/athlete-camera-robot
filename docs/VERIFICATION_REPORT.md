@@ -431,6 +431,69 @@ two real bugs this way, both fixed:
 - **Detection range/quality at robot-relevant distances** (several meters, outdoors) is still
   untested — the webcam captures were all indoors, within a few feet.
 
+## 2026-08-13 (later) — Structured live testing: distance, motion, multi-person; thresholds validated
+
+**Environment:** Windows 11, developer's machine, laptop webcam. Two people present for the
+multi-person round. Extends `.claude/skills/webcam-detection-preview/` with a `--session` mode
+(timed run, per-frame CSV log, periodic snapshots, optional live on-screen window with a big red
+phase-name banner) so a structured multi-scenario test could run with the developer watching in
+real time, without needing another CI+sideload round.
+
+### 1. Distance — ✅ characterized (laptop webcam only, see caveat)
+Four stages, ~1.5–2m through an extreme-far hallway shot:
+
+| Stage | Detection rate | Mean confidence |
+|---|---|---|
+| Baseline (~1.5-2m) | 100% (293/293 frames) | 0.78 |
+| Mid (~3-4m) | 100% (442/442) | 0.74 |
+| Far (~5-8m) | 95% (420/442) | 0.63 |
+| Extreme far (~15-20m+) | 57% (252/442) | 0.61 (among successful detections) |
+
+Detection is reliable through ~8m and degrades to intermittent beyond that — a real, useful data
+point for `docs/PRD.md` §7's open "is detection range adequate" question. **Caveat, stated
+explicitly so it isn't overclaimed:** this is a laptop webcam's optics/resolution, not the iPhone
+16's — it bounds the model's general distance sensitivity but does not substitute for an actual
+phone field test. **Developer feedback:** confidence at 5-8m (~51-63% observed) is lower than
+expected (~85-90%) — logged as a future model-quality improvement (larger model / higher input
+resolution), not a threshold-tuning issue; not acted on now.
+
+### 2. Motion + angle — ✅ verified
+25 seconds of continuous walking, turning (side/back profile), and toward/away movement: **100%
+detection rate (743/743 frames)**, confidence 0.54-0.82 depending on angle/motion blur, box
+placement and offset/bearing math stayed correct throughout (spot-checked against several
+snapshots). No dropped tracking during motion.
+
+### 3. Multi-person primary-athlete selection — ✅ verified, with an honest caveat
+Two static arrangements (20s each): person A closer, then person B closer. In both, the
+largest-box-wins heuristic correctly locked onto the closer/larger person — confirmed visually in
+both. **Caveat, corrected after an initial overclaim:** these were two *separate static*
+arrangements, not one continuous session where both people actively moved and swapped who was
+closer — the offset/bearing log looking smooth (no erratic jumps) is real but is not a rapid-
+switching stress test. `selectPrimaryAthlete.ts`'s own documented known weakness (rapid flicker
+between similarly-sized athletes) remains untested under actual dynamic switching.
+
+### 4. Threshold calibration — ✅ evidence-based conclusion: no change warranted
+Aggregated across all 5 real (non-empty) sessions: **3,652 total frames, 3,333 with a locked
+athlete, confidence range 0.50-0.83, mean 0.72. Zero false positives** (the two smoke-test
+sessions with nobody in frame correctly logged 0 detections throughout). Every real detection
+landed comfortably above `decodeDetections.ts`'s 0.5 score floor and `selectPrimaryAthlete.ts`'s
+0.4 confidence gate — no evidence either threshold is cutting off good detections or letting
+noise through. **Decision: left `MIN_CONFIDENCE` (0.4), the 0.5 score threshold, and
+`CENTER_BUFFER` (0.08) unchanged.** `CENTER_BUFFER` specifically cannot be meaningfully calibrated
+from a static human test — it needs an actual corrective gimbal loop to mean anything — so it
+stays flagged as an unvalidated starting guess, same as before this session.
+
+### 5. Tests + typecheck — ✅ verified
+No production code changed this round (session-mode additions are test-tooling only, in
+`.claude/skills/webcam-detection-preview/`). `npm test` → 65/65, `npm run typecheck` → zero errors,
+unchanged from the prior entry.
+
+### What this does NOT prove
+- Nothing new on the iOS-specific gap already flagged (frame orientation, GPU resizer, CoreML
+  delegate, worklet boundary) — still needs the phone.
+- Rapid primary-athlete switching under live dynamic movement (see §3's caveat).
+- Outdoor/direct-sunlight detection quality — all testing was indoors.
+
 ## Open items for the next contributor
 
 *(Updated 2026-08-13. Ordered — each unblocks the next.)*

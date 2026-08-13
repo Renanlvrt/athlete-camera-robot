@@ -48,10 +48,21 @@ python .claude/skills/webcam-detection-preview/scripts/detect_preview.py --image
 
 # Live window, for the developer to eyeball themselves in real time. Press 'q' to quit.
 python .claude/skills/webcam-detection-preview/scripts/detect_preview.py --live
+
+# Timed, logged, named test session — the one to use for structured multi-scenario testing
+# with the developer present. Saves a periodic snapshot + a per-frame CSV (confidence, offset,
+# bearing, isCentered) under <output-dir>/<name>/, and --show opens a live window with a big red
+# phase-name banner so the developer can watch it happen. Auto-stops after --duration.
+python .claude/skills/webcam-detection-preview/scripts/detect_preview.py \
+  --session distance_far --duration 15 --output-dir sessions \
+  --label "TEST: DISTANCE - FAR" --show
 ```
 
 Read the saved PNG (the `--capture` mode) to judge box size/position and readout legibility
-without needing a live window — this is the mode to use when iterating autonomously.
+without needing a live window — this is the mode to use when iterating autonomously. Use
+`--session` for anything involving the developer physically doing something (walking, changing
+distance, a second person) — the CSV gives quantitative numbers (detection rate, mean confidence,
+centred fraction) instead of relying on eyeballing individual frames.
 
 ## Keep it in sync with the real app
 

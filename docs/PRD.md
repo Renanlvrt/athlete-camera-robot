@@ -239,10 +239,16 @@ disagrees.)*
 
 ### Still genuinely open
 - **Logic for *which* athlete becomes the "locked" one** when several are visible. §4.2 says keep
-  this loose for MVP; start with largest bounding-box area.
+  this loose for MVP; start with largest bounding-box area. **Partially bench-tested 2026-08-13**
+  (`docs/VERIFICATION_REPORT.md`): the largest-box heuristic correctly locked onto the
+  closer/larger of two people in two static arrangements. Still open: rapid switching under live
+  dynamic movement (both people actively moving) was not tested.
 - **Whether detection range is adequate** for a distant athlete with a small quantized model.
   This is the most likely thing to force a rethink of §4.1, and it can only be answered by a
-  field test — not by research.
+  field test — not by research. **Bench-bounded, not closed, 2026-08-13**: a laptop-webcam test
+  (`research/computer-vision/detection-range-bench-finding.md`) found reliable detection to ~8m
+  indoors, intermittent beyond — different optics than the iPhone, so this narrows but does not
+  answer the question. The field test is still required.
 - **Power/brownout behaviour** under real servo load. Explicitly *not* resolvable by research;
   see `research/hardware/power-brownout-risk.md` and the `servo-bounds-test` skill.
 

@@ -13,7 +13,7 @@ NOT prove".
 | Name | Type | Responsibility (one line) | Status |
 |---|---|---|---|
 | `SKILL.md` | file | What this skill does, when to use it, setup + run commands | ✅ verified |
-| `scripts/detect_preview.py` | file | Loads `assets/models/person-detection.tflite`, runs it against a webcam frame or image, ports `decodeDetections.ts`/`selectPrimaryAthlete.ts`/`computeTrackingReadout.ts`/`TrackingOverlay.tsx`, draws the overlay, saves/shows the result | ✅ verified — run against the real bundled model and real webcam frames, 2026-08-13 |
+| `scripts/detect_preview.py` | file | Loads `assets/models/person-detection.tflite`, runs it against a webcam frame, image, or a timed `--session` (CSV log + snapshots + optional live window with a red phase banner), ports `decodeDetections.ts`/`selectPrimaryAthlete.ts`/`computeTrackingReadout.ts`/`TrackingOverlay.tsx` | ✅ verified — run against the real bundled model across ~3,700 real frames (distance/motion/multi-person), 2026-08-13 |
 
 ## Depends on
 `assets/models/person-detection.tflite` (the same file the app bundles), `ai-edge-litert`
