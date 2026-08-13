@@ -15,13 +15,14 @@
  * unless this transform is applied — this is the standard "CSS object-fit:
  * cover" mapping, inverted.
  *
- * KNOWN SIMPLIFICATION, not yet proven on hardware: this assumes the frame's
- * reported `width`/`height` already match the preview's visual orientation
- * (VisionCamera `Frame.orientation === 'up'`), which is the common case for a
- * portrait-locked app (see `app.json`'s `"orientation": "portrait"`). If
- * on-device the overlay box appears rotated 90° from the person it's
- * supposedly tracking, this is the first thing to check — see
- * `src/hooks/useAthleteDetection.ts`.
+ * KNOWN SIMPLIFICATION, not yet proven on hardware: `src/hooks/useAthleteDetection.ts`
+ * corrects the ASPECT RATIO passed in here for a 90°-rotated frame
+ * (`Frame.orientation === 'left'/'right'`), but the detection box's own
+ * (x, y) coordinates from `decodeDetections.ts` are NOT rotated to match —
+ * they're still in the raw sensor buffer's coordinate space. If on-device
+ * the box is reasonably sized but positioned wrong (not just "too big"),
+ * this un-rotated-coordinates gap is the first thing to check — see
+ * `src/hooks/useAthleteDetection.ts`'s `publishFrameSize`.
  */
 
 import type { PersonBox } from '../tracking/types';
@@ -79,5 +80,38 @@ export function mapFrameBoxToViewRect(
     y: offsetY + box.y * scaledFrameHeight,
     width: box.width * scaledFrameWidth,
     height: box.height * scaledFrameHeight,
+  };
+}
+
+/** A point in view pixels. */
+export interface ViewPoint {
+  readonly left: number;
+  readonly top: number;
+}
+
+/** Assumed on-screen footprint of the confidence badge, for clamping. */
+const BADGE_WIDTH = 50;
+const BADGE_HEIGHT = 24;
+const BADGE_INSET = 6;
+
+/**
+ * Where to draw the box's confidence badge, clamped to stay fully on-screen.
+ *
+ * A box computed by `mapFrameBoxToViewRect` can legitimately extend past the
+ * view's edges (a subject close to the camera, or near a frame boundary) —
+ * without clamping, a badge positioned relative to the box's raw top-left
+ * corner can end up at a negative or off-canvas coordinate, invisible.
+ * Found via `.claude/skills/webcam-detection-preview/` — see
+ * `docs/VERIFICATION_REPORT.md`, 2026-08-13.
+ *
+ * @returns A zeroed point if `view` is not yet laid out (non-positive).
+ */
+export function clampBadgePosition(box: ViewRect, view: ViewSize): ViewPoint {
+  if (!(view.width > 0) || !(view.height > 0)) {
+    return { left: 0, top: 0 };
+  }
+  return {
+    left: Math.max(0, Math.min(box.x, view.width - BADGE_WIDTH)),
+    top: Math.max(BADGE_INSET, Math.min(box.y + BADGE_INSET, view.height - BADGE_HEIGHT)),
   };
 }

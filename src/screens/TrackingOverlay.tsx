@@ -6,7 +6,7 @@ import { computeTrackingReadout } from '../tracking/computeTrackingReadout';
 import { selectPrimaryAthlete } from '../tracking/selectPrimaryAthlete';
 import type { PersonBox } from '../tracking/types';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
-import { mapFrameBoxToViewRect } from './frameLayout';
+import { clampBadgePosition, mapFrameBoxToViewRect } from './frameLayout';
 
 interface TrackingOverlayProps {
   readonly boxes: readonly PersonBox[];
@@ -56,34 +56,17 @@ export function TrackingOverlay({
       ? mapFrameBoxToViewRect(primary.athlete, frameAspectRatio, viewSize)
       : undefined;
 
+  const badgeRect = boxRect !== undefined ? clampBadgePosition(boxRect, viewSize) : undefined;
+
+  // Draw order matters: the panel first, the box (+ badge) LAST, so the box
+  // stays visible on top even when it overlaps the panel's screen region —
+  // it was previously drawn first and its badge could render invisibly
+  // underneath the panel. Found via .claude/skills/webcam-detection-preview/,
+  // see docs/VERIFICATION_REPORT.md 2026-08-13.
   return (
     <View style={StyleSheet.absoluteFill} onLayout={handleLayout} pointerEvents="none">
-      {boxRect !== undefined && (
-        <View
-          style={[
-            styles.box,
-            {
-              left: boxRect.x,
-              top: boxRect.y,
-              width: boxRect.width,
-              height: boxRect.height,
-              borderColor: statusColor,
-            },
-          ]}
-        >
-          <Text style={[styles.confidenceLabel, { backgroundColor: statusColor }]}>
-            {Math.round(primary.status === 'locked' ? primary.athlete.confidence * 100 : 0)}%
-          </Text>
-        </View>
-      )}
-
       <View style={styles.panel}>
-        {status === 'loading' && <Text style={styles.hint}>Loading model…</Text>}
-        {status === 'error' && <Text style={styles.hint}>Model failed to load.</Text>}
-        {status === 'ready' && readout === undefined && (
-          <Text style={styles.hint}>No athlete detected.</Text>
-        )}
-        {status === 'ready' && readout !== undefined && (
+        {readout !== undefined ? (
           <>
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -97,8 +80,39 @@ export function TrackingOverlay({
               value={`${Math.round(readout.angleDegrees)}° ${compassLabel(readout.angleDegrees)}`}
             />
           </>
+        ) : status === 'loading' ? (
+          <Text style={styles.hint}>Loading model…</Text>
+        ) : status === 'error' ? (
+          <Text style={styles.hint}>Model failed to load.</Text>
+        ) : (
+          <Text style={styles.hint}>No athlete detected.</Text>
         )}
       </View>
+
+      {boxRect !== undefined && (
+        <View
+          style={[
+            styles.box,
+            {
+              left: boxRect.x,
+              top: boxRect.y,
+              width: boxRect.width,
+              height: boxRect.height,
+              borderColor: statusColor,
+            },
+          ]}
+        />
+      )}
+      {badgeRect !== undefined && (
+        <Text
+          style={[
+            styles.confidenceLabel,
+            { left: badgeRect.left, top: badgeRect.top, backgroundColor: statusColor },
+          ]}
+        >
+          {Math.round(primary.status === 'locked' ? primary.athlete.confidence * 100 : 0)}%
+        </Text>
+      )}
     </View>
   );
 }
@@ -120,8 +134,6 @@ const styles = StyleSheet.create({
   },
   confidenceLabel: {
     position: 'absolute',
-    top: -22,
-    left: -3,
     color: colors.background,
     fontSize: 12,
     fontWeight: '700',

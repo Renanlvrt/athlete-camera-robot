@@ -366,27 +366,95 @@ Run `31641145475` (commit `b039ba3`) succeeded on the first attempt. Downloaded 
 - **The `CENTER_BUFFER` (0.08) constant** in `computeTrackingReadout.ts` is an unvalidated
   starting guess, same status as `defaultGimbalTuning`.
 
+## 2026-08-13 — First on-device report + two real bugs found and fixed via webcam testing
+
+**Environment:** Windows 11, developer's machine. The developer installed the 2026-08-12 build on
+their iPhone via AltStore (using Apple Devices' Files feature to get the `.ipa` into AltStore's
+storage, then AltStore's `+`) and reported it launched, but the tracking box was **"way too
+big"** and **no distance/bearing numbers were visible**.
+
+### 1. Diagnosis — could not be done on the device, reasoned from the API instead
+No device logs were available. Re-read `node_modules/react-native-vision-camera`'s `Frame.nitro.d.ts`
+and found the likely cause: `Frame.width`/`Frame.height` are **raw sensor buffer dimensions**,
+not automatically rotated to the display's orientation. `src/hooks/useAthleteDetection.ts` had
+been computing `frameAspectRatio` directly from these raw dimensions — if the real device reports
+`Frame.orientation` as `'left'`/`'right'` (a 90° rotation), the aspect ratio fed into
+`frameLayout.ts`'s `'cover'`-fit math would be wrong, and that math **amplifies** an aspect-ratio
+error into a large scale/position error — a plausible full explanation for "way too big."
+**Fix:** `publishFrameSize` now swaps width/height when `frame.orientation` is `'left'`/`'right'`
+before computing the ratio. **Not verified on the device** — this is a reasoned fix, not a proven
+one; see the residual-risk comment left in the file (box *coordinates*, not just the aspect
+ratio, may also need rotating — unverifiable without the device).
+
+### 2. Built `.claude/skills/webcam-detection-preview/` — ✅ verified, new capability
+A Python script running the exact bundled `assets/models/person-detection.tflite` (via
+`ai-edge-litert`, installed clean with `pip install ai-edge-litert`) against the laptop's own
+webcam, with a faithful port of `decodeDetections.ts` / `selectPrimaryAthlete.ts` /
+`computeTrackingReadout.ts` / `TrackingOverlay.tsx`'s drawing logic. Confirmed the model's real
+input/output tensor shapes directly (`interpreter.get_input_details()` /
+`get_output_details()`) — matches `research/computer-vision/person-detection-model-asset.md`
+exactly: input `[1,300,300,3]` uint8, four `[1,10,…]` float32 outputs.
+
+### 3. Real-person testing — ✅ ~20 frames captured and visually inspected
+Captured bursts of webcam frames with a live person (two different people, at different points)
+across: face-on, side profile (head turned), close-up, low light, near/at frame edges, and in
+motion (including motion blur). In every case a person was in frame, the model found them. Found
+two real bugs this way, both fixed:
+
+- **Confidence badge invisible under the status panel.** `TrackingOverlay.tsx` drew the box
+  (+ badge) BEFORE the panel — later-drawn siblings paint on top in RN, so the panel could hide
+  the badge whenever they overlapped (visually confirmed in the Python harness: `6?%` rendering
+  faintly through the panel's semi-transparent background). **Fix:** swapped the draw order
+  (panel first, box+badge last) in both `TrackingOverlay.tsx` and the Python harness.
+- **Badge position not clamped to the screen.** The badge was positioned relative to the box's
+  raw top-left corner, which can be off-screen (negative) when the subject is close to the
+  camera or near a frame edge. **Fix:** extracted `clampBadgePosition()` into
+  `src/screens/frameLayout.ts` (6 new unit tests), used by `TrackingOverlay.tsx`; ported the same
+  clamp into the Python harness. Re-captured the exact scenario that exposed it (person very
+  close, box extending past two edges at once) — badge stayed on-screen after the fix.
+- Also removed the numeric readout panel's dependency on the hook's `status` field — it now shows
+  whenever a `readout` exists, regardless of `status`, removing a plausible (if unconfirmed)
+  explanation for "no numbers visible" (a `status`/`boxes` state desync, e.g. across a dev-client
+  Fast Refresh).
+
+### 4. Tests + typecheck — ✅ verified
+`npm test` → **65/65 passing** (up from 59 — 6 new `clampBadgePosition` tests).
+`npm run typecheck` → zero errors.
+
+### What this does NOT prove
+- **The orientation fix (§1) is unverified on the device.** It's a reasoned fix from reading the
+  API, not something the webcam harness can exercise (a laptop webcam has no comparable
+  orientation-metadata rotation). The next phone install is the actual test.
+- **Nothing about `react-native-vision-camera-resizer`'s GPU resize, the CoreML delegate, or the
+  worklet/JS-thread boundary was touched by this testing** — see
+  `.claude/skills/webcam-detection-preview/SKILL.md`'s "What this does NOT prove".
+- **Detection range/quality at robot-relevant distances** (several meters, outdoors) is still
+  untested — the webcam captures were all indoors, within a few feet.
+
 ## Open items for the next contributor
 
-*(Updated 2026-08-12. Ordered — each unblocks the next. Items 1–2 from the prior version of this
-list are done: the repo is pushed and public, and CI has run green 4/4 times.)*
+*(Updated 2026-08-13. Ordered — each unblocks the next.)*
 
-1. **Install the current build on the iPhone 16 via AltStore** (`docs/YOUR_STEPS.md` has the full
-   walkthrough) and confirm the app launches at all. This is still the single biggest unknown —
-   nothing app-level has ever touched the real device.
-2. **Run `.claude/skills/cv-framerate-test/` Stage 1 and Stage 2** — or just watch
-   `TrackingOverlay`'s status line go from "Loading model…" to a real reading — to confirm the
-   model loads, the CoreML delegate engages, and a real person in frame produces a box roughly
-   where they're standing. If the box is offset or rotated, check the `Frame.orientation`
-   assumption flagged in `src/hooks/useAthleteDetection.ts` and `src/screens/frameLayout.ts`.
-3. Once installed once, **use `expo start --dev-client`** for further UI-only iteration
-   (readout layout, colors, `CENTER_BUFFER` tuning) instead of a new CI build per change.
-4. **Log whatever happens in `testing/REAL_HARDWARE_TEST_LOG.md`** — that file currently has
+1. **Rebuild via CI and reinstall on the iPhone** to test the two fixes in this entry
+   (`.claude/skills/build-unsigned-ipa/`, then `docs/YOUR_STEPS.md`'s AltStore steps — Apple
+   Devices → Files → AltStore → Add File, then AltStore → My Apps → `+` on the phone). Confirm
+   the box is no longer oversized and the readout numbers are visible.
+2. **If the box is still wrong after that**, it's very likely the *coordinate rotation* gap
+   flagged in `src/hooks/useAthleteDetection.ts` and `src/screens/frameLayout.ts` (not the aspect
+   ratio, which is now fixed) — log `frame.orientation` on-device to confirm before guessing
+   further.
+3. **Use `.claude/skills/webcam-detection-preview/` for any further decode/overlay iteration**
+   before spending a build+sideload round — it catches most bugs in under a second per frame.
+4. **Run `.claude/skills/cv-framerate-test/`** once the box/readout look right, to confirm timing
+   and that the CoreML delegate actually engages.
+5. Once installed once, **use `expo start --dev-client`** for UI-only iteration instead of a new
+   CI build per change.
+6. **Log whatever happens in `testing/REAL_HARDWARE_TEST_LOG.md`** — that file currently has
    **zero** entries. Only a human can write to it (`CLAUDE.md` §5.2).
-5. **Buy the PCA9685** (PRD §8) before `servo-bounds-test` or any gimbal work can run.
-6. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not
+7. **Buy the PCA9685** (PRD §8) before `servo-bounds-test` or any gimbal work can run.
+8. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not
    begin it without the user explicitly asking, per `CLAUDE.md` §4 and §7.
 
-**Standing reminder:** as of 2026-08-12, CI has proven the app **builds**; nothing has proven it
-**runs** — no app has been installed on the iPhone, no BLE link has been made, no servo has
-moved, no model has run inference on a real frame. Treat every `⚠️` tag accordingly.
+**Standing reminder:** as of 2026-08-13, one on-device report exists (box too big, no numbers) —
+diagnosed and fixed as far as reasoning from the API allows, verified as far as a laptop webcam
+allows, but **not yet re-confirmed on the device.** Treat every `⚠️` tag accordingly.

@@ -31,15 +31,19 @@ import type { PersonBox } from '../tracking/types';
  * confirmed in `research/computer-vision/person-detection-model-asset.md`; the
  * exact decode is `src/tracking/decodeDetections.ts`.
  *
- * KNOWN SIMPLIFICATION, not yet proven on hardware: the resizer is configured
- * with `scaleMode: 'stretch'`, which — because it does not crop or letterbox —
- * makes the model's normalised output coordinates equal to full CAMERA FRAME
- * normalised coordinates directly, with no extra transform. This assumes the
- * frame is already in the app's display orientation (`Frame.orientation ===
- * 'up'`), true for the common case of a portrait-locked app matching
- * `app.json`'s `"orientation": "portrait"`. If detections on-device look
- * present but the overlay box is rotated 90° from the person, check this
- * assumption first — see `src/screens/frameLayout.ts`.
+ * The resizer is configured with `scaleMode: 'stretch'`, which — because it
+ * does not crop or letterbox — makes the model's normalised output
+ * coordinates equal to full CAMERA FRAME normalised coordinates directly,
+ * with no extra transform for the box itself. The frame's `width`/`height`
+ * are RAW SENSOR BUFFER dimensions, though, and are not automatically
+ * rotated to match display orientation (`Frame.orientation`, see
+ * `node_modules/react-native-vision-camera/lib/specs/instances/Frame.nitro.d.ts`).
+ * `publishFrameSize` below corrects for this by swapping width/height when
+ * `orientation` is `'left'`/`'right'` before computing the aspect ratio that
+ * `src/screens/frameLayout.ts` uses to place the overlay box — getting this
+ * wrong is the most likely explanation for a wildly oversized/mispositioned
+ * box, since `frameLayout.ts`'s `'cover'`-fit math amplifies any aspect-ratio
+ * error into a large positioning error.
  */
 
 const MODEL_INPUT_SIZE = 300;
@@ -81,10 +85,25 @@ export function useAthleteDetection(): AthleteDetectionResult {
     [],
   );
 
-  const publishFrameSize = useCallback((width: number, height: number) => {
+  const publishFrameSize = useCallback((width: number, height: number, isRotated: boolean) => {
     if (hasSetAspectRatio.current || width <= 0 || height <= 0) return;
     hasSetAspectRatio.current = true;
-    setFrameAspectRatio(width / height);
+    // A 'left'/'right' orientation means the raw buffer is rotated 90°
+    // relative to how it will actually be displayed — swap the dimensions so
+    // the aspect ratio matches what's on screen, not the raw sensor buffer.
+    //
+    // NOT YET SUFFICIENT ON ITS OWN if orientation really is rotated: this
+    // only corrects the ASPECT RATIO used for the 'cover'-fit scale in
+    // frameLayout.ts. The detection box's own (x, y) coordinates from
+    // decodeDetections.ts are still in the RAW buffer's coordinate space —
+    // if orientation ever comes back 'left'/'right' on the real device, the
+    // box's position (not just the overall scale) would also need a 90°
+    // coordinate rotation before frameLayout.ts's math, which isn't
+    // implemented yet. This can't be exercised or verified from a laptop
+    // webcam (no orientation-metadata rotation there) — if the box is still
+    // wrong after this fix, log `frame.orientation` on-device and check here
+    // first before assuming anything else.
+    setFrameAspectRatio(isRotated ? height / width : width / height);
   }, []);
 
   const model = plugin.state === 'loaded' ? plugin.model : undefined;
@@ -95,7 +114,8 @@ export function useAthleteDetection(): AthleteDetectionResult {
     pixelFormat: 'yuv',
     onFrame: (frame) => {
       'worklet';
-      runOnJS(publishFrameSize)(frame.width, frame.height);
+      const isRotated = frame.orientation === 'left' || frame.orientation === 'right';
+      runOnJS(publishFrameSize)(frame.width, frame.height, isRotated);
 
       if (resizer == null || model == null) {
         frame.dispose();

@@ -1,4 +1,4 @@
-import { mapFrameBoxToViewRect } from './frameLayout';
+import { clampBadgePosition, mapFrameBoxToViewRect } from './frameLayout';
 import type { PersonBox } from '../tracking/types';
 
 function box(over: Partial<PersonBox> = {}): PersonBox {
@@ -66,5 +66,42 @@ describe('mapFrameBoxToViewRect', () => {
   it('returns a zero rect rather than propagating a NaN box', () => {
     const result = mapFrameBoxToViewRect(box({ x: NaN }), 1, { width: 100, height: 100 });
     expect(result).toEqual({ x: 0, y: 0, width: 0, height: 0 });
+  });
+});
+
+describe('clampBadgePosition', () => {
+  const view = { width: 400, height: 800 };
+
+  it('sits just inside a box that is fully within the view', () => {
+    const result = clampBadgePosition({ x: 100, y: 100, width: 50, height: 50 }, view);
+    expect(result.left).toBe(100);
+    expect(result.top).toBe(106); // box.y + BADGE_INSET
+  });
+
+  it('clamps left to 0 for a box extending past the left edge', () => {
+    const result = clampBadgePosition({ x: -300, y: 100, width: 50, height: 50 }, view);
+    expect(result.left).toBe(0);
+  });
+
+  it('clamps left so the badge never extends past the right edge', () => {
+    const result = clampBadgePosition({ x: 390, y: 100, width: 50, height: 50 }, view);
+    expect(result.left).toBeLessThanOrEqual(view.width - 50);
+  });
+
+  it('clamps top to stay on-screen for a box above the frame (never negative)', () => {
+    const result = clampBadgePosition({ x: 100, y: -500, width: 50, height: 50 }, view);
+    expect(result.top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('clamps top so the badge never extends past the bottom edge', () => {
+    const result = clampBadgePosition({ x: 100, y: 790, width: 50, height: 50 }, view);
+    expect(result.top).toBeLessThanOrEqual(view.height - 24);
+  });
+
+  it('returns the origin for a zero-sized view (not yet laid out)', () => {
+    expect(clampBadgePosition({ x: 100, y: 100, width: 50, height: 50 }, { width: 0, height: 0 })).toEqual({
+      left: 0,
+      top: 0,
+    });
   });
 });
