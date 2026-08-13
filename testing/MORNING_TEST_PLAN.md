@@ -5,6 +5,40 @@ checklist top to bottom — it's ordered so the highest-value, most-blocking ite
 and it marks explicitly which tracks can run at the same time so nothing sits idle waiting on
 something else.
 
+## ⚠️ 2026-08-13 update — §3/§4 are now out of date, read this first
+
+The app has grown well past the "camera preview, 3 screens" state this document was written for.
+**§3's install steps and troubleshooting table are still accurate** (same AltStore process). **§4
+is not** — the app now has a full Stage 4 tracking screen, not just a bare preview. The first
+real phone install already happened (2026-08-09) and found real bugs (oversized box, invisible
+readout), which are now fixed and laptop-verified but not yet re-confirmed on the device — see
+`docs/VERIFICATION_REPORT.md`'s 2026-08-13 entries for the full history. Since then, a further
+round added a front/back camera toggle, correct front-camera un-mirroring, a dashed center-line +
+vector readout, and basic video recording — **none of which has touched the phone yet.**
+
+When the next phone session happens, check all of this (replaces the old §4 checklist):
+1. **Box size/position** — should be reasonably tight around the person, not covering half the
+   screen. If it's still wrong, see the residual "box coordinate rotation" gap flagged in
+   `src/hooks/useAthleteDetection.ts`.
+2. **Readout panel** — offset %, bearing, and the compact up/down + left/right line should all be
+   visible and update live. Box + confidence badge should stay visible even when they overlap the
+   panel (a fixed bug — confirm it stayed fixed).
+3. **Dashed yellow line** from box-center to screen-center — should point the right direction and
+   update as you move.
+4. **Green/amber color** — turns green (and the panel says CENTERED) only when actually centred.
+5. **Front/back toggle button** (top-right) — tap it, confirm the preview actually switches
+   cameras, and that tracking on the front camera is correctly oriented (not mirrored) — this is
+   the one thing from this round that's genuinely unverified even in principle without the device.
+6. **Record button** (bottom-center) — tap to start/stop, confirm a video file actually gets
+   produced (check `Recorder`'s file path — there's no in-app "view recordings" UI yet, this may
+   need checking via a file browser or a temporary debug log). No audio is recorded by design this
+   round.
+
+Use `.claude/skills/webcam-detection-preview/` (with `--mirror` for front-camera scenarios) for
+any further iteration on box/readout/line bugs found here — much faster than another CI round.
+
+---
+
 **Read `docs/NIGHT_REPORT.md` first if you haven't** — it says what changed overnight. The one
 fact that changes everything below: **the CI build now works.** `.github/workflows/build-ios-unsigned.yml`
 ran green 3/3 attempts overnight (`docs/VERIFICATION_REPORT.md`, "CI workflow ran green, first
