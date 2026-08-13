@@ -44,6 +44,13 @@ import type { PersonBox } from '../tracking/types';
  * wrong is the most likely explanation for a wildly oversized/mispositioned
  * box, since `frameLayout.ts`'s `'cover'`-fit math amplifies any aspect-ratio
  * error into a large positioning error.
+ *
+ * FRONT CAMERA: `frame.isMirrored` is passed straight through to
+ * `decodeDetections`'s `isMirrored` option, which flips each box's `x`
+ * before it's ever stored in state — every downstream consumer
+ * (`src/tracking/`, `src/screens/`) sees already-correct, un-mirrored
+ * coordinates and doesn't need to know which camera produced them. See
+ * `src/hooks/useCameraSetup.ts` for the front/back toggle this supports.
  */
 
 const MODEL_INPUT_SIZE = 300;
@@ -79,8 +86,8 @@ export function useAthleteDetection(): AthleteDetectionResult {
   const hasSetAspectRatio = useRef(false);
 
   const publishDetections = useCallback(
-    (rawBoxes: number[], rawClasses: number[], rawScores: number[]) => {
-      setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores));
+    (rawBoxes: number[], rawClasses: number[], rawScores: number[], isMirrored: boolean) => {
+      setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores, { isMirrored }));
     },
     [],
   );
@@ -132,7 +139,7 @@ export function useAthleteDetection(): AthleteDetectionResult {
       const rawBoxes = Array.from(new Float32Array(outputs[0]));
       const rawClasses = Array.from(new Float32Array(outputs[1]));
       const rawScores = Array.from(new Float32Array(outputs[2]));
-      runOnJS(publishDetections)(rawBoxes, rawClasses, rawScores);
+      runOnJS(publishDetections)(rawBoxes, rawClasses, rawScores, frame.isMirrored);
 
       frame.dispose();
     },

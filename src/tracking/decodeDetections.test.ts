@@ -130,6 +130,46 @@ describe('decodeDetections', () => {
     expect(decodeDetections(boxes, classes, scores)).toEqual([]);
   });
 
+  describe('isMirrored', () => {
+    it('leaves x unchanged when isMirrored is false (default)', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.2, 0.3, 0.6, 0.7] },
+      ]);
+      const result = decodeDetections(boxes, classes, scores);
+      expect(result[0]?.x).toBeCloseTo(0.3);
+    });
+
+    it('flips x to the mirrored position when isMirrored is true', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.2, 0.3, 0.6, 0.7] },
+      ]);
+      // width = 0.7 - 0.3 = 0.4; mirrored x = 1 - 0.3 - 0.4 = 0.3 (symmetric box, unchanged here)
+      const result = decodeDetections(boxes, classes, scores, { isMirrored: true });
+      expect(result[0]?.x).toBeCloseTo(0.3);
+    });
+
+    it('mirrors an asymmetric box to the opposite side of the frame', () => {
+      // A box hugging the left edge (x=0, width=0.2) should end up hugging
+      // the right edge (x=0.8) once mirrored.
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.4, 0.0, 0.6, 0.2] },
+      ]);
+      const result = decodeDetections(boxes, classes, scores, { isMirrored: true });
+      expect(result[0]?.x).toBeCloseTo(0.8);
+      expect(result[0]?.width).toBeCloseTo(0.2);
+    });
+
+    it('mirroring twice is not the same as not mirroring — only y is ever left alone', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.4, 0.1, 0.6, 0.3] },
+      ]);
+      const mirrored = decodeDetections(boxes, classes, scores, { isMirrored: true })[0];
+      const notMirrored = decodeDetections(boxes, classes, scores, { isMirrored: false })[0];
+      expect(mirrored?.y).toBe(notMirrored?.y);
+      expect(mirrored?.x).not.toBe(notMirrored?.x);
+    });
+  });
+
   it('is a pure function — does not mutate its input', () => {
     const { boxes, classes, scores } = detectionSet([
       { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.1, 0.1, 0.5, 0.5] },

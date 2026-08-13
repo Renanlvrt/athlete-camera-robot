@@ -6,20 +6,23 @@ them. **Read `CLAUDE.md` first** for the rules this index system follows.
 Read `docs/PRD.md` for what is decided vs. future.
 
 Current milestone: **Milestone 1 / Stage 4 — live camera preview + on-device person detection +
-tracking overlay (box, distance, bearing, centred indicator).** Code and unit tests are done and
-verified on Windows; on-device behavior is not (see below). Multi-athlete UX, base movement, and
-everything else in `docs/PRD.md` §5–§6 remain untouched.
+tracking overlay (box, distance, bearing, dashed center-line, centred indicator), front/back
+camera toggle, and basic video recording.** Code and unit tests are done and verified on Windows;
+on-device behavior of everything added since the first phone install is not (see below).
+Multi-athlete UX, base movement, and everything else in `docs/PRD.md` §5–§6 remain untouched.
 
-## ⚠️ One on-device report so far — box too big, fixed but not re-confirmed
+## ⚠️ One on-device report so far — box-too-big fixed, next round untested
 
-As of **2026-08-13**: `npm install`, `npm run typecheck`, and `npm test` (65/65) all succeed, the
-Expo config evaluates, and **the CI build pipeline has run green 4 times** (`.github/workflows/index.md`,
-`docs/VERIFICATION_REPORT.md`) producing a real, inspected unsigned `.ipa`. The app **has** now
-been installed on the iPhone and launched — the first real on-device report found the tracking
-box was oversized/mispositioned and the readout numbers weren't visible. Both were diagnosed and
-fixed (see `docs/VERIFICATION_REPORT.md`'s 2026-08-13 entry) using
-`.claude/skills/webcam-detection-preview/` for everything testable off-device, but **the fixes
-have not yet been re-confirmed on the phone.** No BLE link has been made and no servo has moved.
+As of **2026-08-13**: `npm install`, `npm run typecheck`, and `npm test` (73/73) all succeed, the
+Expo config evaluates, and **the CI build pipeline has run green 5 times** (`.github/workflows/index.md`,
+`docs/VERIFICATION_REPORT.md`) producing a real, inspected unsigned `.ipa`. The app **has** been
+installed on the iPhone and launched once — that report found the tracking box was
+oversized/mispositioned (traced to using the front camera without mirroring/orientation handling)
+and the readout numbers weren't visible. Both were diagnosed and fixed, then a further round added
+a front/back toggle, correct front-camera un-mirroring, a dashed center-line + vector readout, and
+basic video recording — all implemented and laptop-tested as far as possible
+(`.claude/skills/webcam-detection-preview/`), but **none of this second round has been installed
+on the phone yet.** No BLE link has been made and no servo has moved.
 `testing/REAL_HARDWARE_TEST_LOG.md` still has zero entries — only a human running
 `testing/MORNING_TEST_PLAN.md` can change that (`CLAUDE.md` §5.2).
 
@@ -37,9 +40,9 @@ wasn't checked, and `testing/MORNING_TEST_PLAN.md` for the ordered path to a rea
 | `testing/` | folder | Human-reported results from real hardware — see `testing/index.md` | ⚠️ structure only — **zero results recorded** |
 | `design/` | folder | UI mockups for direction-setting — see `design/index.md` | ✅ verified |
 | `assets/` | folder | Bundled static files (the TFLite model) — see `assets/index.md` | ⚠️ needs verification — model sourced/confirmed, inference untested on device |
-| `src/` | folder | All application source loaded by `index.ts` — see `src/index.md` | ⚠️ mixed — `src/tracking/` + `src/screens/frameLayout.ts` are ✅ unit-tested (65 tests total); on-device rendering is still unconfirmed after the 2026-08-13 fixes |
+| `src/` | folder | All application source loaded by `index.ts` — see `src/index.md` | ⚠️ mixed — `src/tracking/` + `src/screens/frameLayout.ts` are ✅ unit-tested (73 tests total); on-device rendering (including front/back switching and recording) is unconfirmed |
 | `.claude/` | folder | Skills (`skills/`) and subagents (`agents/`) — see each folder's `index.md` | ⚠️ needs verification — `build-unsigned-ipa` and `webcam-detection-preview` are ✅ verified (both runnable/run from this machine), the other 3 hardware skills are unrun |
-| `.github/` | folder | CI workflow for the unsigned iOS build — see `.github/index.md` | ✅ verified — ran green 4 times, most recently 2026-08-12 |
+| `.github/` | folder | CI workflow for the unsigned iOS build — see `.github/index.md` | ✅ verified — ran green 5 times, most recently 2026-08-13 |
 | `index.ts` | file | Expo entry point; registers `src/App.tsx` as the root component | ✅ verified |
 | `app.json` | file | Expo config: bundle IDs, camera permissions, fast-tflite/ble-plx plugins | ⚠️ needs verification — evaluates cleanly and CI's `expo prebuild` succeeds, but effect on-device (permission prompts, plugin behavior) unconfirmed |
 | `metro.config.js` | file | Adds `.tflite` to Metro's asset extensions so models bundle | ⚠️ needs verification (never bundled on device) |

@@ -1,5 +1,6 @@
 import { useCameraSetup } from './hooks/useCameraSetup';
 import { useAthleteDetection } from './hooks/useAthleteDetection';
+import { useVideoRecording } from './hooks/useVideoRecording';
 import { PermissionRequiredScreen } from './screens/PermissionRequiredScreen';
 import { NoCameraDeviceScreen } from './screens/NoCameraDeviceScreen';
 import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
@@ -13,9 +14,10 @@ import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
  * contain camera logic, styling, or permission/detection logic itself —
  * those live in src/hooks/ and src/screens/ respectively.
  *
- * useAthleteDetection() is called unconditionally (Rules of Hooks) even
- * though its output is only rendered in the 'ready' branch — model loading
- * and frame-output setup don't depend on the camera device being resolved.
+ * useAthleteDetection() and useVideoRecording() are called unconditionally
+ * (Rules of Hooks) even though their output is only rendered in the 'ready'
+ * branch — model loading, frame-output, and video-output setup don't depend
+ * on the camera device being resolved.
  *
  * This is Stage 4 of the implementation plan (live preview + person
  * detection + tracking overlay). See docs/PRD.md §4 for the full roadmap and
@@ -24,6 +26,7 @@ import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
 export default function App() {
   const setup = useCameraSetup();
   const detection = useAthleteDetection();
+  const recording = useVideoRecording();
 
   switch (setup.status) {
     case 'requesting-permission':
@@ -38,6 +41,12 @@ export default function App() {
           boxes={detection.boxes}
           frameAspectRatio={detection.frameAspectRatio}
           detectionStatus={detection.status}
+          facing={setup.facing}
+          onToggleFacing={setup.toggleFacing}
+          videoOutput={recording.videoOutput}
+          recordingStatus={recording.status}
+          onStartRecording={recording.startRecording}
+          onStopRecording={recording.stopRecording}
         />
       );
   }

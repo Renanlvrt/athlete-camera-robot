@@ -56,6 +56,13 @@ python .claude/skills/webcam-detection-preview/scripts/detect_preview.py --live
 python .claude/skills/webcam-detection-preview/scripts/detect_preview.py \
   --session distance_far --duration 15 --output-dir sessions \
   --label "TEST: DISTANCE - FAR" --show
+
+# Any mode also accepts --mirror, which simulates the front/selfie camera: flips the
+# frame before feeding the model, then un-mirrors the result so it's still drawn on the
+# original frame — exercises decodeDetections.ts's isMirrored path without a real front
+# camera. A laptop webcam has no equivalent to actually switch, so this is the only way
+# to test front-camera correctness off-device.
+python .claude/skills/webcam-detection-preview/scripts/detect_preview.py --mirror --capture out.png
 ```
 
 Read the saved PNG (the `--capture` mode) to judge box size/position and readout legibility

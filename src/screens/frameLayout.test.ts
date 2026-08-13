@@ -1,4 +1,4 @@
-import { clampBadgePosition, mapFrameBoxToViewRect } from './frameLayout';
+import { clampBadgePosition, computeLineStyle, mapFrameBoxToViewRect } from './frameLayout';
 import type { PersonBox } from '../tracking/types';
 
 function box(over: Partial<PersonBox> = {}): PersonBox {
@@ -103,5 +103,66 @@ describe('clampBadgePosition', () => {
       left: 0,
       top: 0,
     });
+  });
+});
+
+describe('computeLineStyle', () => {
+  it('produces a zero-length line for two identical points', () => {
+    const result = computeLineStyle({ x: 50, y: 50 }, { x: 50, y: 50 });
+    expect(result.width).toBe(0);
+    expect(result.left).toBe(50);
+    expect(result.top).toBe(50);
+  });
+
+  it('computes the correct length for a horizontal line', () => {
+    const result = computeLineStyle({ x: 0, y: 100 }, { x: 200, y: 100 });
+    expect(result.width).toBeCloseTo(200);
+    expect(result.rotateDeg).toBeCloseTo(0);
+    expect(result.left).toBeCloseTo(0); // mid (100) - width/2 (100)
+    expect(result.top).toBeCloseTo(100);
+  });
+
+  it('computes the correct length and angle for a vertical line', () => {
+    const result = computeLineStyle({ x: 50, y: 0 }, { x: 50, y: 200 });
+    expect(result.width).toBeCloseTo(200);
+    expect(result.rotateDeg).toBeCloseTo(90);
+  });
+
+  it('rotating the computed segment around its own center reproduces both original endpoints', () => {
+    // The actual geometric guarantee computeLineStyle relies on: take the
+    // returned {left, top, width}, treat it as a horizontal segment from
+    // (left, top) to (left+width, top), rotate every point around the
+    // segment's OWN center by rotateDeg, and the two ends must land back on
+    // the original `from`/`to` — this is exactly how RN's default
+    // (center-origin) rotation renders it.
+    const from = { x: 30, y: 400 };
+    const to = { x: 320, y: 120 };
+    const line = computeLineStyle(from, to);
+
+    const centerX = line.left + line.width / 2;
+    const centerY = line.top;
+    const rad = (line.rotateDeg * Math.PI) / 180;
+
+    function rotateAroundCenter(px: number, py: number): { x: number; y: number } {
+      const dx = px - centerX;
+      const dy = py - centerY;
+      return {
+        x: centerX + dx * Math.cos(rad) - dy * Math.sin(rad),
+        y: centerY + dx * Math.sin(rad) + dy * Math.cos(rad),
+      };
+    }
+
+    const endA = rotateAroundCenter(line.left, line.top);
+    const endB = rotateAroundCenter(line.left + line.width, line.top);
+
+    // The two rotated endpoints must match {from, to}, in either order.
+    const matchesFrom = (p: { x: number; y: number }) =>
+      Math.abs(p.x - from.x) < 0.01 && Math.abs(p.y - from.y) < 0.01;
+    const matchesTo = (p: { x: number; y: number }) =>
+      Math.abs(p.x - to.x) < 0.01 && Math.abs(p.y - to.y) < 0.01;
+
+    expect((matchesFrom(endA) && matchesTo(endB)) || (matchesFrom(endB) && matchesTo(endA))).toBe(
+      true,
+    );
   });
 });

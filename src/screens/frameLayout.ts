@@ -115,3 +115,47 @@ export function clampBadgePosition(box: ViewRect, view: ViewSize): ViewPoint {
     top: Math.max(BADGE_INSET, Math.min(box.y + BADGE_INSET, view.height - BADGE_HEIGHT)),
   };
 }
+
+/** A point in view pixels, for line-geometry math (as opposed to `ViewPoint`, which names its
+ * fields `left`/`top` to drop straight into a style object). */
+export interface CenterPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The absolute style props needed to render a straight `View`-based line between two points. */
+export interface LineStyle {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  /** Degrees, for a `transform: [{ rotate: '${rotateDeg}deg' }]`. */
+  readonly rotateDeg: number;
+}
+
+/**
+ * Compute the position/length/rotation for a `View` styled as a thin
+ * horizontal line (e.g. `{ height: 0, borderBottomWidth: N }`) that, once
+ * rotated, spans exactly from `from` to `to`.
+ *
+ * Relies on RN's default rotation behaviour (around the element's own
+ * center) rather than `transformOrigin`, which isn't reliably supported
+ * everywhere: a horizontal segment of length `distance`, centred on the
+ * midpoint of `from`/`to` and rotated by the angle between them, has
+ * endpoints at exactly `from` and `to` — ordinary rotation geometry, not an
+ * approximation.
+ */
+export function computeLineStyle(from: CenterPoint, to: CenterPoint): LineStyle {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const rotateDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+  return {
+    left: midX - distance / 2,
+    top: midY,
+    width: distance,
+    rotateDeg,
+  };
+}

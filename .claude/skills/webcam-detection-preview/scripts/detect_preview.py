@@ -64,7 +64,7 @@ PERSON_CLASS_ID = 0
 DEFAULT_MIN_SCORE = 0.5
 
 
-def decode_detections(boxes, classes, scores, min_score=DEFAULT_MIN_SCORE, person_class_id=PERSON_CLASS_ID):
+def decode_detections(boxes, classes, scores, min_score=DEFAULT_MIN_SCORE, person_class_id=PERSON_CLASS_ID, is_mirrored=False):
     """boxes: flat list/array of 4*MAX_DETECTIONS floats, [ymin,xmin,ymax,xmax] per slot."""
     result = []
     for i in range(MAX_DETECTIONS):
@@ -81,7 +81,8 @@ def decode_detections(boxes, classes, scores, min_score=DEFAULT_MIN_SCORE, perso
         if not (width > 0) or not (height > 0):
             continue
 
-        result.append({"x": float(xmin), "y": float(ymin), "width": float(width), "height": float(height), "confidence": float(score)})
+        x = 1 - xmin - width if is_mirrored else xmin
+        result.append({"x": float(x), "y": float(ymin), "width": float(width), "height": float(height), "confidence": float(score)})
     return result
 
 
@@ -143,6 +144,31 @@ COLOR_LOCKED_BGR = (89, 199, 52)  # colors.locked '#34c759', BGR for cv2
 COLOR_TEXT_BGR = (255, 255, 255)
 
 
+def draw_dashed_line(frame_bgr, pt1, pt2, color, dash_len=10, gap_len=8, thickness=2):
+    """cv2 has no built-in dashed line — step along the segment in dash+gap
+    increments, drawing a short solid segment for each dash."""
+    x1, y1 = pt1
+    x2, y2 = pt2
+    total_len = math.hypot(x2 - x1, y2 - y1)
+    if total_len < 1:
+        return
+    dx = (x2 - x1) / total_len
+    dy = (y2 - y1) / total_len
+    step = dash_len + gap_len
+    distance = 0.0
+    while distance < total_len:
+        seg_start = distance
+        seg_end = min(distance + dash_len, total_len)
+        cv2.line(
+            frame_bgr,
+            (int(x1 + dx * seg_start), int(y1 + dy * seg_start)),
+            (int(x1 + dx * seg_end), int(y1 + dy * seg_end)),
+            color,
+            thickness,
+        )
+        distance += step
+
+
 def draw_overlay(frame_bgr, athlete, readout):
     """Mutates and returns frame_bgr with the readout panel + box drawn on it.
 
@@ -166,6 +192,12 @@ def draw_overlay(frame_bgr, athlete, readout):
         lines.append(status_text)
         lines.append(f"offset: {round(readout['distance'] * 100)}%")
         lines.append(f"bearing: {round(readout['angle_degrees'])} deg {compass_label(readout['angle_degrees'])}")
+        v_arrow = "up" if readout["offset_y"] < 0 else "down"
+        h_arrow = "left" if readout["offset_x"] < 0 else "right"
+        lines.append(
+            f"{v_arrow} {round(abs(readout['offset_y']) * 100)}%   "
+            f"{h_arrow} {round(abs(readout['offset_x']) * 100)}%"
+        )
 
     panel_h = 30 * len(lines) + 20
     panel_w = 260
@@ -189,6 +221,11 @@ def draw_overlay(frame_bgr, athlete, readout):
         y1 = int(athlete["y"] * h)
         x2 = int((athlete["x"] + athlete["width"]) * w)
         y2 = int((athlete["y"] + athlete["height"]) * h)
+
+        box_center = ((x1 + x2) / 2, (y1 + y2) / 2)
+        screen_center = (w / 2, h / 2)
+        draw_dashed_line(frame_bgr, box_center, screen_center, color)
+
         cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), color, 2)
 
         # Badge INSIDE the box's top-left corner, clamped to stay on-canvas —
@@ -232,11 +269,17 @@ def draw_phase_label(frame_bgr, label):
 # --- pipeline -----------------------------------------------------------------
 
 
-def run_detection(interpreter, frame_bgr):
+def run_detection(interpreter, frame_bgr, is_mirrored=False):
+    """Run detection on `frame_bgr`. If `is_mirrored`, the model is fed a
+    horizontally-flipped copy of the frame (simulating a front/selfie camera's
+    raw buffer) and the resulting boxes are un-mirrored back — callers should
+    always draw the result on the ORIGINAL `frame_bgr`, never a flipped copy,
+    same as the real app never shows the raw mirrored buffer to the user."""
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
-    resized = cv2.resize(frame_bgr, (MODEL_INPUT_SIZE, MODEL_INPUT_SIZE))  # 'stretch', matches scaleMode='stretch' in useAthleteDetection.ts
+    model_input = cv2.flip(frame_bgr, 1) if is_mirrored else frame_bgr
+    resized = cv2.resize(model_input, (MODEL_INPUT_SIZE, MODEL_INPUT_SIZE))  # 'stretch', matches scaleMode='stretch' in useAthleteDetection.ts
     rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     input_tensor = np.expand_dims(rgb, axis=0).astype(np.uint8)
 
@@ -247,13 +290,13 @@ def run_detection(interpreter, frame_bgr):
     classes = interpreter.get_tensor(output_details[1]["index"])[0]
     scores = interpreter.get_tensor(output_details[2]["index"])[0]
 
-    detections = decode_detections(boxes, classes, scores)
+    detections = decode_detections(boxes, classes, scores, is_mirrored=is_mirrored)
     athlete = select_primary_athlete(detections)
     readout = compute_tracking_readout(athlete) if athlete is not None else None
     return detections, athlete, readout
 
 
-def run_session(interpreter, cap, name, duration, output_dir, snapshot_interval, label=None, show=False):
+def run_session(interpreter, cap, name, duration, output_dir, snapshot_interval, label=None, show=False, mirrored=False):
     """Run for `duration` seconds, logging every frame to CSV and saving a
     snapshot every `snapshot_interval` seconds. If `show`, also opens a live
     window on the actual screen for the whole run (auto-closes at the end).
@@ -282,7 +325,7 @@ def run_session(interpreter, cap, name, duration, output_dir, snapshot_interval,
             if not ok:
                 continue
 
-            detections, athlete, readout = run_detection(interpreter, frame)
+            detections, athlete, readout = run_detection(interpreter, frame, is_mirrored=mirrored)
             row = [
                 round(elapsed, 2),
                 len(detections),
@@ -345,6 +388,14 @@ def main():
     parser.add_argument("--snapshot-interval", type=float, default=1.0, help="Seconds between saved snapshots in --session mode.")
     parser.add_argument("--label", type=str, default=None, help="Big red banner text drawn on every frame in --session mode (e.g. a test phase name).")
     parser.add_argument("--show", action="store_true", help="In --session mode, also open a live window on-screen for the run.")
+    parser.add_argument(
+        "--mirror",
+        action="store_true",
+        help="Simulate a front/selfie camera: flips the frame before feeding the model, "
+        "then un-mirrors the resulting box so it's drawn correctly on the original, "
+        "unflipped frame — exercises the same isMirrored path as useAthleteDetection.ts "
+        "without needing the phone's actual front camera.",
+    )
     args = parser.parse_args()
 
     interpreter = load_interpreter()
@@ -354,7 +405,7 @@ def main():
         if frame is None:
             print(f"ERROR: could not read image at {args.image}", file=sys.stderr)
             return 1
-        detections, athlete, readout = run_detection(interpreter, frame)
+        detections, athlete, readout = run_detection(interpreter, frame, is_mirrored=args.mirror)
         annotated = draw_overlay(frame, athlete, readout)
         out_path = args.capture or "detection_preview.png"
         cv2.imwrite(out_path, annotated)
@@ -377,6 +428,7 @@ def main():
                 args.snapshot_interval,
                 label=args.label,
                 show=args.show,
+                mirrored=args.mirror,
             )
             print(
                 f"session={summary['name']} frames={summary['total_frames']} "
@@ -394,7 +446,7 @@ def main():
                 ok, frame = cap.read()
                 if not ok:
                     break
-                _, athlete, readout = run_detection(interpreter, frame)
+                _, athlete, readout = run_detection(interpreter, frame, is_mirrored=args.mirror)
                 annotated = draw_overlay(frame, athlete, readout)
                 cv2.imshow("webcam-detection-preview", annotated)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -410,7 +462,7 @@ def main():
             if not ok:
                 print("ERROR: could not read from webcam", file=sys.stderr)
                 return 1
-        detections, athlete, readout = run_detection(interpreter, frame)
+        detections, athlete, readout = run_detection(interpreter, frame, is_mirrored=args.mirror)
         annotated = draw_overlay(frame, athlete, readout)
         out_path = args.capture or "detection_preview.png"
         cv2.imwrite(out_path, annotated)

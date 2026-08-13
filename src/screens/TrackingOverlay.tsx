@@ -6,7 +6,7 @@ import { computeTrackingReadout } from '../tracking/computeTrackingReadout';
 import { selectPrimaryAthlete } from '../tracking/selectPrimaryAthlete';
 import type { PersonBox } from '../tracking/types';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
-import { clampBadgePosition, mapFrameBoxToViewRect } from './frameLayout';
+import { clampBadgePosition, computeLineStyle, mapFrameBoxToViewRect } from './frameLayout';
 
 interface TrackingOverlayProps {
   readonly boxes: readonly PersonBox[];
@@ -58,6 +58,18 @@ export function TrackingOverlay({
 
   const badgeRect = boxRect !== undefined ? clampBadgePosition(boxRect, viewSize) : undefined;
 
+  // Dashed line from the box's center to the screen's center — a visual
+  // "here's the correction vector" cue that's readable at a glance even
+  // without reading the numbers, per the operator's own framing: "so that we
+  // know this even when filming".
+  const centerLine =
+    boxRect !== undefined && viewSize.width > 0
+      ? computeLineStyle(
+          { x: boxRect.x + boxRect.width / 2, y: boxRect.y + boxRect.height / 2 },
+          { x: viewSize.width / 2, y: viewSize.height / 2 },
+        )
+      : undefined;
+
   // Draw order matters: the panel first, the box (+ badge) LAST, so the box
   // stays visible on top even when it overlaps the panel's screen region —
   // it was previously drawn first and its badge could render invisibly
@@ -79,6 +91,14 @@ export function TrackingOverlay({
               label="bearing"
               value={`${Math.round(readout.angleDegrees)}° ${compassLabel(readout.angleDegrees)}`}
             />
+            <View style={styles.vectorRow}>
+              <Text style={styles.vectorText}>
+                {readout.offsetY < 0 ? '↑' : '↓'} {Math.round(Math.abs(readout.offsetY) * 100)}%
+              </Text>
+              <Text style={styles.vectorText}>
+                {readout.offsetX < 0 ? '←' : '→'} {Math.round(Math.abs(readout.offsetX) * 100)}%
+              </Text>
+            </View>
           </>
         ) : status === 'loading' ? (
           <Text style={styles.hint}>Loading model…</Text>
@@ -89,6 +109,20 @@ export function TrackingOverlay({
         )}
       </View>
 
+      {centerLine !== undefined && (
+        <View
+          style={[
+            styles.centerLine,
+            {
+              left: centerLine.left,
+              top: centerLine.top,
+              width: centerLine.width,
+              borderBottomColor: statusColor,
+              transform: [{ rotate: `${centerLine.rotateDeg}deg` }],
+            },
+          ]}
+        />
+      )}
       {boxRect !== undefined && (
         <View
           style={[
@@ -132,6 +166,12 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderRadius: 8,
   },
+  centerLine: {
+    position: 'absolute',
+    height: 0,
+    borderBottomWidth: 2,
+    borderStyle: 'dashed',
+  },
   confidenceLabel: {
     position: 'absolute',
     color: colors.background,
@@ -165,4 +205,13 @@ const styles = StyleSheet.create({
   // Tabular figures so numbers don't jitter as they update — read at a
   // glance from a distance (see .claude/agents/ux-reviewer.md).
   statValue: { color: colors.text, fontSize: 20, fontVariant: ['tabular-nums'] },
+  // Small/compact by design — this is the up/down + left/right decomposition
+  // of the same "offset" stat above, not a headline number.
+  vectorRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  vectorText: {
+    color: colors.text,
+    fontSize: 13,
+    opacity: 0.8,
+    fontVariant: ['tabular-nums'],
+  },
 });

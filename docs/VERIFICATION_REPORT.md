@@ -494,20 +494,85 @@ unchanged from the prior entry.
 - Rapid primary-athlete switching under live dynamic movement (see §3's caveat).
 - Outdoor/direct-sunlight detection quality — all testing was indoors.
 
+## 2026-08-13 (evening) — First on-device root cause found; front/back camera, dashed line, recording added
+
+**Environment:** Windows 11, developer's machine. Developer installed the Phone Test #1 build,
+diagnosed the "box too big / no numbers" report themselves: the app was pointed at the **front**
+camera, whose frame is mirrored — combined with the still-unproven orientation assumption, this
+fully explains the earlier report. No further phone install happened this round, per the
+developer's explicit request to batch changes and test almost everything on the laptop.
+
+### 1. Front/back camera toggle — ⚠️ needs verification (code + typecheck only)
+`useCameraSetup.ts` now holds a `facing` state (`'front'`|`'back'`, default `'back'`) and a
+`toggleFacing()` callback, exposed on **every** status branch (not just `'ready'`) so a device
+lacking a front camera can never strand the user with no way back. New `CameraControls.tsx`
+button in the top-right. Cannot be exercised by the webcam harness (a laptop has no back camera
+to switch to) — untested until the device.
+
+### 2. Front-camera mirroring — ✅ verified as far as possible without the device
+`react-native-vision-camera`'s `Frame.isMirrored` is threaded through
+`useAthleteDetection.ts` into `decodeDetections.ts`'s new `isMirrored` option, which flips each
+box's `x` (`1 - x - width`) before it's ever stored — every downstream consumer sees already-
+correct coordinates regardless of which camera produced them. 4 new unit tests. Verified via a
+new `--mirror` flag on `.claude/skills/webcam-detection-preview/`: flips the frame before
+inference (simulating a front camera's raw buffer), decodes with `isMirrored=True`, and draws the
+result on the *original* frame. A/B capture of the same scene with and without `--mirror` landed
+the box at the same true position (offset 24-26%, bearing 180-184°, difference within normal
+frame-to-frame variance) — the mirror simulation and the un-mirror fix cancel out correctly.
+
+### 3. Dashed center-line + vector readout — ✅ verified
+New `computeLineStyle()` in `frameLayout.ts` (4 tests, including a rotation-reproduces-both-
+endpoints geometric proof) computes the position/length/rotation for a `View` with
+`borderStyle: 'dashed'` spanning from the box's center to the screen's center — RN's default
+center-origin rotation, not `transformOrigin`, which isn't reliably supported everywhere. Ported
+to the Python harness with a manual dash-segment loop (`cv2` has no native dashed line) and
+confirmed visually: the dashed line renders correctly and points the right direction relative to
+the reported up/down/left/right values. The readout panel also gained a compact decomposed
+vector line (`"down 4%   right 7%"`) alongside the existing combined `offset`/`bearing` stats —
+percentage of frame, not real-world units (no depth sensor to calibrate against), confirmed as
+the right call with the developer directly.
+
+### 4. Video recording — ⚠️ needs verification (code + typecheck only, cannot be laptop-tested at all)
+New `useVideoRecording.ts`, written against the real v5 API (`useVideoOutput` + `Recorder`,
+checked directly in `node_modules`, not memory). No audio (avoids a microphone permission this
+round); saves to a temp file, not the Photos library (avoids a new native dependency +
+permission this round) — both deliberately deferred so this stays a single, self-contained
+change. `<Camera outputs={[frameOutput, videoOutput]}>` — the recorded file is the camera's raw
+feed, a separate native pipeline from the RN view tree, so `TrackingOverlay`'s box/readout is
+never in the saved video even though it stays visible live. New record/stop button in
+`CameraControls.tsx`. **This is the one piece of this round that fundamentally cannot be tested
+off-device** — no laptop equivalent of a native video encoder + Recorder session exists.
+
+### 5. Tests + typecheck — ✅ verified
+`npm test` → **73/73 passing** (up from 65 — 4 new `isMirrored` tests, 4 new `computeLineStyle`
+tests). `npm run typecheck` → zero errors.
+
+### What this does NOT prove
+- Front/back switching and recording — see §1 and §4, both need the real device.
+- The frame-coordinate-rotation gap for a 90°-rotated frame, flagged since 2026-08-13 (later),
+  remains unverified — mirroring and orientation are separate concerns and this round only fixed
+  the former with laptop-verifiable confidence.
+- No new CI build was triggered this round — nothing here has been packaged into an `.ipa` yet.
+
 ## Open items for the next contributor
 
-*(Updated 2026-08-13. Ordered — each unblocks the next.)*
+*(Updated 2026-08-13 evening. Ordered — each unblocks the next. Per the developer's explicit
+request, phone testing is being batched — at most one more install before the truly final one —
+so this list front-loads everything laptop-testable first.)*
 
-1. **Rebuild via CI and reinstall on the iPhone** to test the two fixes in this entry
-   (`.claude/skills/build-unsigned-ipa/`, then `docs/YOUR_STEPS.md`'s AltStore steps — Apple
-   Devices → Files → AltStore → Add File, then AltStore → My Apps → `+` on the phone). Confirm
-   the box is no longer oversized and the readout numbers are visible.
-2. **If the box is still wrong after that**, it's very likely the *coordinate rotation* gap
-   flagged in `src/hooks/useAthleteDetection.ts` and `src/screens/frameLayout.ts` (not the aspect
-   ratio, which is now fixed) — log `frame.orientation` on-device to confirm before guessing
-   further.
-3. **Use `.claude/skills/webcam-detection-preview/` for any further decode/overlay iteration**
-   before spending a build+sideload round — it catches most bugs in under a second per frame.
+1. **Keep using `.claude/skills/webcam-detection-preview/` for any further decode/overlay
+   iteration** (now including `--mirror` for front-camera testing) — it catches most bugs in
+   under a second per frame, no build required.
+2. **When ready for the next phone install** (Phone Test #2 of the developer's 2-total budget,
+   not necessarily the final one): rebuild via CI (`.claude/skills/build-unsigned-ipa/`), then
+   AltStore install (`docs/YOUR_STEPS.md` — Apple Devices → Files → AltStore → Add File, then
+   AltStore → My Apps → `+`). Check, in order: (a) box no longer oversized, numbers visible
+   (should already be fixed); (b) front/back toggle actually switches cameras; (c) front-camera
+   tracking is correctly un-mirrored; (d) the dashed line + vector readout render as designed;
+   (e) recording actually produces a playable file.
+3. **If the box is still wrong on back camera specifically**, it's the *coordinate rotation* gap
+   flagged in `src/hooks/useAthleteDetection.ts` and `src/screens/frameLayout.ts` (aspect ratio is
+   fixed, box (x,y) rotation for a 90°-rotated frame is not) — log `frame.orientation` to confirm.
 4. **Run `.claude/skills/cv-framerate-test/`** once the box/readout look right, to confirm timing
    and that the CoreML delegate actually engages.
 5. Once installed once, **use `expo start --dev-client`** for UI-only iteration instead of a new
@@ -518,6 +583,8 @@ unchanged from the prior entry.
 8. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not
    begin it without the user explicitly asking, per `CLAUDE.md` §4 and §7.
 
-**Standing reminder:** as of 2026-08-13, one on-device report exists (box too big, no numbers) —
-diagnosed and fixed as far as reasoning from the API allows, verified as far as a laptop webcam
-allows, but **not yet re-confirmed on the device.** Treat every `⚠️` tag accordingly.
+**Standing reminder:** as of 2026-08-13 evening, one on-device report exists (box too big, no
+numbers — root-caused by the developer as front-camera mirroring). That's fixed and
+laptop-verified as far as possible; front/back switching, correct on-device un-mirroring, and
+recording are all implemented but **not yet confirmed on the device.** Treat every `⚠️` tag
+accordingly.

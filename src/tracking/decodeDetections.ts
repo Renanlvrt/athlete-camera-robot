@@ -46,6 +46,16 @@ export interface DecodeDetectionsOptions {
   readonly minScore?: number;
   /** Which class id counts as "person" for this model. */
   readonly personClassId?: number;
+  /**
+   * True when the source frame is mirrored (the front/selfie camera) — see
+   * `Frame.isMirrored` in `react-native-vision-camera`. When set, each box's
+   * `x` is flipped (`1 - x - width`) so downstream code always sees
+   * coordinates in the same left-right sense as what's actually displayed,
+   * regardless of which physical camera produced the frame. Front-camera
+   * frames come out of the model still mirrored — this is not a rare edge
+   * case, it's the normal case for that camera.
+   */
+  readonly isMirrored?: boolean;
 }
 
 /**
@@ -61,6 +71,7 @@ export function decodeDetections(
 ): PersonBox[] {
   const minScore = options.minScore ?? DEFAULT_MIN_SCORE;
   const personClassId = options.personClassId ?? PERSON_CLASS_ID;
+  const isMirrored = options.isMirrored ?? false;
 
   const result: PersonBox[] = [];
 
@@ -85,7 +96,8 @@ export function decodeDetections(
     // are always false, so a non-finite or zero/negative extent is dropped.
     if (!(width > 0) || !(height > 0)) continue;
 
-    result.push({ x: xmin, y: ymin, width, height, confidence: score });
+    const x = isMirrored ? 1 - xmin - width : xmin;
+    result.push({ x, y: ymin, width, height, confidence: score });
   }
 
   return result;

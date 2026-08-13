@@ -9,9 +9,9 @@ rendering lives in `screens/`, shared style values live in `theme/`, and
 
 | Name | Type | Responsibility (one line) | Status |
 |---|---|---|---|
-| `App.tsx` | file | Composition root — switches on `useCameraSetup()`'s status and renders exactly one screen. No business logic, no styling. | ✅ verified |
-| `hooks/` | folder | State and side-effect logic, no JSX — see `hooks/index.md` | ⚠️ mixed — `useCameraSetup` verified, `useAthleteDetection` untested on hardware |
-| `screens/` | folder | Full-screen React components, no business logic — see `screens/index.md` | ⚠️ mixed — permission/no-device screens verified, tracking overlay untested on hardware |
+| `App.tsx` | file | Composition root — switches on `useCameraSetup()`'s status and renders exactly one screen, wiring in `useAthleteDetection()` and `useVideoRecording()` unconditionally. No business logic, no styling. | ✅ verified |
+| `hooks/` | folder | State and side-effect logic, no JSX — see `hooks/index.md` | ⚠️ mixed — logic verified via `.claude/skills/webcam-detection-preview/` and tests where possible; front/back switching and recording untested on hardware |
+| `screens/` | folder | Full-screen React components, no business logic — see `screens/index.md` | ⚠️ mixed — permission/no-device screens verified, tracking overlay/camera controls untested on hardware |
 | `tracking/` | folder | Pure decision logic: who to follow, how far to move the gimbal, what to show on screen, how to decode the model's raw output. Unit-tested, no hardware needed — see `tracking/index.md` | ✅ verified |
 | `theme/` | folder | Shared style tokens (colors, and future spacing/typography) — see `theme/index.md` | ✅ verified |
 

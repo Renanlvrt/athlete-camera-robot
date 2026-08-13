@@ -19,13 +19,13 @@ sending bytes to the robot (future `src/ble/`), or drawing anything (`src/screen
 | `selectPrimaryAthlete.ts` | file | Every detection → the one athlete to lock onto | ✅ verified |
 | `computeGimbalCorrection.ts` | file | Locked athlete's offset → roll/pitch deltas (proportional, clamped) | ✅ verified |
 | `computeTrackingReadout.ts` | file | Locked athlete's offset → human-readable distance/bearing + `isCentered`, for the on-screen UI | ✅ verified |
-| `decodeDetections.ts` | file | Raw SSD-MobileNet-V1 output tensors → `PersonBox[]`, filtered to the person class | ✅ verified |
+| `decodeDetections.ts` | file | Raw SSD-MobileNet-V1 output tensors → `PersonBox[]`, filtered to the person class, with an `isMirrored` option that un-mirrors `x` for front-camera frames | ✅ verified |
 | `selectPrimaryAthlete.test.ts` | file | 12 tests: confidence gating, largest-area, tie determinism, purity | ✅ verified |
 | `computeGimbalCorrection.test.ts` | file | 16 tests: sign convention, proportionality, deadband, step cap, NaN, convergence | ✅ verified |
 | `computeTrackingReadout.test.ts` | file | 12 tests: bearing convention in all 4 directions, buffer boundary, NaN/Infinity, purity | ✅ verified |
-| `decodeDetections.test.ts` | file | 12 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity | ✅ verified |
+| `decodeDetections.test.ts` | file | 16 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity, `isMirrored` flip on both sides of the frame | ✅ verified |
 
-**Verified how:** `npm test` → 52/52 passing across this folder (59/59 repo-wide);
+**Verified how:** `npm test` → 56/56 passing across this folder (73/73 repo-wide);
 `npm run typecheck` → zero errors. Recorded in `docs/VERIFICATION_REPORT.md`. Note these tags
 cover the *logic*; the tuning **constants** and `PERSON_CLASS_ID`/tensor-order assumptions behind
 `decodeDetections.ts` are unvalidated against the real model running on real hardware until a
