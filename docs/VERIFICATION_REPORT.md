@@ -494,12 +494,24 @@ unchanged from the prior entry.
 - Rapid primary-athlete switching under live dynamic movement (see §3's caveat).
 - Outdoor/direct-sunlight detection quality — all testing was indoors.
 
-## 2026-08-13 (evening) — First on-device root cause found; front/back camera, dashed line, recording added
+## 2026-08-13 (evening) — Front/back camera, dashed line, recording added; root cause still open
 
-**Environment:** Windows 11, developer's machine. Developer installed the Phone Test #1 build,
-diagnosed the "box too big / no numbers" report themselves: the app was pointed at the **front**
-camera, whose frame is mirrored — combined with the still-unproven orientation assumption, this
-fully explains the earlier report. No further phone install happened this round, per the
+**Environment:** Windows 11, developer's machine. Developer installed the Phone Test #1 build and
+reported the "box too big / no numbers" issue, then reported their own hypothesis: the app was
+using the **front** camera, whose frame is mirrored.
+
+**⚠️ Correction, caught while writing up this entry:** that hypothesis does not fully square with
+the code that was actually running. The Phone Test #1 build's `useCameraSetup.ts` called
+`useCameraDevice('back')` unconditionally — there was no front/back selection in the app at all
+before this round's changes, so the installed build could not have been *using* the front camera
+in the sense of an app-level choice. What's genuinely still true and useful regardless: mirroring
+handling was entirely missing, and building it properly (§2 below) is correct and needed once a
+front/back toggle exists either way. But it should **not** be treated as a confirmed explanation
+for the original oversized-box report — the still-unverified frame-orientation/coordinate-rotation
+gap (flagged repeatedly in `src/hooks/useAthleteDetection.ts` and `src/screens/frameLayout.ts`)
+remains at least as likely a cause, possibly the only one. **The next phone test needs to check
+the box on the BACK camera specifically**, since that's what was actually being used when the
+original bug was reported. No further phone install happened this round regardless, per the
 developer's explicit request to batch changes and test almost everything on the laptop.
 
 ### 1. Front/back camera toggle — ⚠️ needs verification (code + typecheck only)
@@ -548,11 +560,16 @@ off-device** — no laptop equivalent of a native video encoder + Recorder sessi
 tests). `npm run typecheck` → zero errors.
 
 ### What this does NOT prove
+- **The original "box too big" report's actual root cause is still open** — see the correction
+  above. Mirroring is now handled correctly regardless, but that's not confirmed to be what
+  caused the first report.
 - Front/back switching and recording — see §1 and §4, both need the real device.
 - The frame-coordinate-rotation gap for a 90°-rotated frame, flagged since 2026-08-13 (later),
   remains unverified — mirroring and orientation are separate concerns and this round only fixed
-  the former with laptop-verifiable confidence.
-- No new CI build was triggered this round — nothing here has been packaged into an `.ipa` yet.
+  the mirroring one with laptop-verifiable confidence.
+- A CI build (run `31747664570`, triggered by this round's push) was in progress as this entry
+  was written — see `.github/workflows/index.md` for the outcome once known. Still no phone
+  install of any of this round's changes.
 
 ## Open items for the next contributor
 

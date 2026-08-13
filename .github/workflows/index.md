@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 5 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 6 times |
 
-## Status: ✅ verified green, 5/5 runs, most recently 2026-08-13 (Phone Test #1 build)
+## Status: ✅ verified green, 6/6 runs, most recently 2026-08-13 (evening — front/back camera, dashed line, recording)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -22,6 +22,11 @@ Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31731682846` (commit `920674e` — Phone Test #1: orientation fix, badge z-order/clamping
   fix, structured webcam testing): success, artifact still 14.1 MB (no app-source changes this
   round, test tooling + docs only).
+- Run `31747664570` (commit `28919e3` — front/back camera toggle, front-camera un-mirroring,
+  dashed center-line + vector readout, video recording): success, auto-triggered by the push
+  (this workflow's `on: push` trigger, not a deliberate `workflow_dispatch`). Artifact still
+  14.1 MB. Confirms the new native usage (`useVideoOutput`/`Recorder`) at least compiles and
+  archives cleanly — says nothing about whether recording actually works at runtime.
 
 All four produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
 zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
