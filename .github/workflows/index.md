@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 6 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 7 times |
 
-## Status: ✅ verified green, 6/6 runs, most recently 2026-08-13 (evening — front/back camera, dashed line, recording)
+## Status: ✅ verified green, 7/7 runs, most recently 2026-08-13 (night — deterministic mirroring fix)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -27,10 +27,14 @@ Triggered four times via `gh workflow run` / an automatic `push` trigger:
   (this workflow's `on: push` trigger, not a deliberate `workflow_dispatch`). Artifact still
   14.1 MB. Confirms the new native usage (`useVideoOutput`/`Recorder`) at least compiles and
   archives cleanly — says nothing about whether recording actually works at runtime.
+- Run `31750739831` (commit `0994313` — mirror-correction switched from `Frame.isMirrored` to
+  the resolved `CameraDevice.position`): success in 8m0s, auto-triggered by the push. Artifact
+  still 14.1 MB (no native surface changed, just which signal drives a JS-side boolean). **This
+  is the build to install for Phone Test #2.**
 
-All four produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
+All seven produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
 zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
-`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all four
+`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all seven
 runs** — none of the "likely first failures" predicted below have occurred yet. Full detail in
 `docs/VERIFICATION_REPORT.md`.
 
