@@ -118,14 +118,17 @@ yet confirmed — see §2's checklist for exactly how to check.
 - [ ] **Battery disconnect within reach** for the servo-related steps (§3.2, §3.3, §3.4). For a
       USB power bank this just means "unplug the USB cable" — confirm that's physically easy to
       do quickly, not buried under other wiring.
-- [ ] **Micro:bit revision identified (v1 or v2)** — matters because v1 has much less flash for
-      the BLE stack; if `bluetooth` import fails when flashing, that's almost certainly why (see
-      `ble-ping`'s script comments). Check by looking at the **back of the board** for "V1" or
-      "V2" printed directly on it — the definitive check. A secondary hint: v2 boards have a
-      **built-in capacitive touch sensor on the front gold logo** (tapping it works like a
-      button) and a small round speaker/mic grille near the edges; v1 boards have neither. If the
-      logo responds to touch, that's a strong sign it's a v2, but check the back printing to be
-      certain before assuming.
+- [x] **Micro:bit revision identified — very likely V2.** Checked 2026-08-14 by reading
+      `DETAILS.TXT` on the mounted `MICROBIT` USB drive (this is a plain identifier readout, not
+      a hardware behaviour test — reading a file, not observing BLE/servo/anything working, so
+      it doesn't fall under `CLAUDE.md` §5.2's human-only rule). Unique ID begins `9905...` —
+      per `support.microbit.org`, the ID prefix's device-code digit is `03`/`04` for confirmed V2
+      boards and `00`/`01` for V1; `05` isn't in that specific support article's table but
+      follows the same V2-family numbering (high confidence, not 100%). **Confirm physically
+      before flashing anything BLE-heavy:** look at the board's bottom edge — V2's is
+      **bumpy/scalloped**, V1's is **flat** — and/or tap the gold front logo; V2 treats it as a
+      touch sensor (lights up in some default firmware), V1 does not. If either confirms V2,
+      trust it — flash without the v1 flash-capacity concern.
 - [ ] The phone has the latest build installed (§4 covers triggering that build).
 
 ## 3. Sequencing — do these in order, each is a real gate for the next
