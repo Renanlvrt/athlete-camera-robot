@@ -5,6 +5,30 @@ checklist top to bottom — it's ordered so the highest-value, most-blocking ite
 and it marks explicitly which tracks can run at the same time so nothing sits idle waiting on
 something else.
 
+## ⚠️ 2026-08-14 update — §5/§6/§8 are now out of date; read `docs/ROBOT_INTEGRATION_PLAN.md` instead
+
+Two things changed the ground under this section since it was written: the PCA9685 is now
+**acquired and wired** (confirmed by the user 2026-08-14, `docs/PRD.md` §8 — §8 below was written
+when it was still "blocked on the PCA9685" and is stale), and the phone app now has a real BLE
+transport + control loop (`src/ble/`, `src/hooks/useGimbalControl.ts`) instead of nothing. §5
+(BLE bench test), §6 (BLE phone test), and §8 (servo bounds test) below are still individually
+correct as *procedures*, but **the sequencing and prerequisites across all three are now fully
+superseded by `docs/ROBOT_INTEGRATION_PLAN.md`** — read that document for the current ordered
+path (`ble-ping` → `servo-bounds-test` → `gimbal-control-firmware` → full field test), its
+prerequisites checklist (including the still-unconfirmed battery/power-bank status), and what's
+actually implemented on the phone side now versus what this section describes.
+
+The phone-install checklist in the very next section (2026-08-13 update, item list of 6) also
+needs two updates for the newest build (CI run `31762839976`, see `.github/workflows/index.md`):
+- **Item 1 (box size/position):** the back-camera box-rotation gap it references is now fixed
+  (`src/tracking/decodeDetections.ts`'s `orientBox`) — re-check specifically on the back camera.
+- **Item 6 (record button):** recordings should now actually appear in the **Photos app**, not
+  just produce an unlocatable temp file — check there directly, and check `CameraControls.tsx`'s
+  status line for `SAVED TO PHOTOS` vs `SAVE TO PHOTOS FAILED`.
+- **New item:** a small `BLE:` badge (top-left) should read `BLE: OFF` or similar sensibly, even
+  with no micro:bit powered on nearby — confirm it doesn't crash the app before any BLE hardware
+  is involved at all.
+
 ## ⚠️ 2026-08-13 update — §3/§4 are now out of date, read this first
 
 The app has grown well past the "camera preview, 3 screens" state this document was written for.

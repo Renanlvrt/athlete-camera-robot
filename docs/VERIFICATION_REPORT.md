@@ -639,8 +639,139 @@ so this list front-loads everything laptop-testable first.)*
 8. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not
    begin it without the user explicitly asking, per `CLAUDE.md` §4 and §7.
 
-**Standing reminder:** as of 2026-08-13 evening, one on-device report exists (box too big, no
-numbers — root-caused by the developer as front-camera mirroring). That's fixed and
-laptop-verified as far as possible; front/back switching, correct on-device un-mirroring, and
-recording are all implemented but **not yet confirmed on the device.** Treat every `⚠️` tag
-accordingly.
+**Standing reminder (superseded by the 2026-08-14 entry below):** as of 2026-08-13 evening, one
+on-device report exists (box too big, no numbers — root-caused by the developer as front-camera
+mirroring). That's fixed and laptop-verified as far as possible; front/back switching, correct
+on-device un-mirroring, and recording are all implemented but **not yet confirmed on the
+device.** Treat every `⚠️` tag accordingly.
+
+## 2026-08-14 (night) — Phone Test #2 fixes, BLE transport, gimbal control loop, micro:bit firmware
+
+### Phone Test #2 result (reported by the developer)
+Two findings from the build recorded in `.github/workflows/index.md`'s `31750739831` entry:
+1. **Front camera:** tracking worked correctly.
+2. **Back camera:** the box was wrong "as if it was wrong side + wrong top/down" — both axes at
+   once, not just mirrored. This is the exact signature of a missing 180° (or ±90°) rotation
+   correction, not a mirroring problem — mirroring only ever flips one axis (x).
+3. **Recording:** the recording itself worked, but nothing appeared in the Photos app — expected,
+   since that build only ever wrote to a temp file (documented as deliberately deferred in
+   `useVideoRecording.ts`'s prior doc comment).
+
+### Fix 1 — back-camera box rotation — ✅ verified (logic), ⚠️ unverified (on-device)
+`src/tracking/decodeDetections.ts` gained an `orientation` option and an `orientBox` function that
+rotates a raw-buffer-space box into upright space for all four `CameraOrientation` values
+(`'up'/'right'/'down'/'left'`), derived directly from
+`node_modules/react-native-vision-camera/lib/specs/instances/Frame.nitro.d.ts`'s and
+`.../common-types/CameraOrientation.d.ts`'s documented semantics (`CLAUDE.md` §4.1) — not
+guessed. Applied BEFORE the existing `isMirrored` step (rotation is a buffer-geometry fact,
+mirroring is a separate camera-facing fact). `src/hooks/useAthleteDetection.ts` now passes
+`frame.orientation` through `runOnJS(publishDetections)` every frame.
+
+**Tests:** 7 new cases in `decodeDetections.test.ts` — identity, 180°, ±90° (with the expected
+width/height swap), that 'right'/'left' land an asymmetric corner-hugging test box on visibly
+different corners, that rotation composes correctly with mirroring (order matters, tested
+explicitly), and a post-rotation-degenerate-box guard. `npm test` → all passing (103/103
+repo-wide after this whole night's additions). `npm run typecheck` → zero errors.
+
+**What this does NOT prove:** whether it actually fixes the reported back-camera symptom — that
+requires the next phone install, same as always for anything Frame/VisionCamera-specific.
+
+### Fix 2 — recordings now save to Photos — ⚠️ unverified (on-device, cannot be otherwise)
+Added `expo-media-library` (`~57.0.3`) and an `expo.plugins` entry in `app.json` with custom
+permission strings. `useVideoRecording.ts` now calls `requestPermissionsAsync(true)` (write-only)
+then `Asset.create(filePath)` after a recording finishes, exposed as a new `saveStatus`/
+`saveError` separate from the recording's own `status` — a failed Photos copy never looks like a
+lost recording, since `lastRecordingPath` still points at the valid temp file either way.
+
+**Scar avoided, not hit (`CLAUDE.md` §4.1):** every tutorial for this package describes
+`MediaLibrary.saveToLibraryAsync(uri)`. Checked `node_modules/expo-media-library/build/*.d.ts`
+directly before writing any code: in the installed version (the package's "Next" API rewrite),
+that function is only re-exported for backwards compatibility from `legacyWarnings.d.ts`, and
+every export there is explicitly documented `@deprecated ... This method will throw in runtime.`
+The real, current call is the static `Asset.create(filePath)`. Using the tutorial-documented call
+would have typechecked cleanly and then thrown at runtime on the very first recording — exactly
+the failure mode this section of `CLAUDE.md` exists to prevent, caught here before it ever ran.
+
+**UI:** `CameraControls.tsx`'s status line now shows `SAVING TO PHOTOS…` / `SAVED TO PHOTOS` /
+`SAVE TO PHOTOS FAILED` once recording itself returns to idle, so the next phone test has direct
+visual confirmation instead of having to check the Photos app blind.
+
+### BLE transport + control loop + micro:bit firmware — all new, zero hardware contact
+`src/ble/` (transport), `src/hooks/useGimbalControl.ts` (control loop: `selectPrimaryAthlete` →
+`computeGimbalCorrection` → rate-limited ~15Hz BLE send), `src/screens/BleStatusBadge.tsx` (UI),
+and `.claude/skills/gimbal-control-firmware/` (the micro:bit-side production program) were all
+written this session. Full design rationale is in each file's own doc comment and
+`docs/ROBOT_INTEGRATION_PLAN.md` — not duplicated here to avoid the two documents drifting out of
+sync. Headline facts for this log specifically:
+
+- `src/ble/encodeGimbalPacket.ts` and `src/ble/base64.ts` are pure and fully unit-tested (8 + 15
+  tests) — base64 output is cross-checked against Node's own `Buffer` as ground truth.
+- `src/ble/useBleConnection.ts` is written directly against
+  `node_modules/react-native-ble-plx/src/index.d.ts` (every method/type/enum confirmed there, not
+  from the pre-existing research doc alone) but **has no unit test** — it's almost entirely native
+  BLE side effects, and per `CLAUDE.md` §5.2 no agent may claim a hardware behavior works without
+  a human running it. `typecheck` passing is the only automated evidence that exists for this file.
+- **Real correction made while writing the encoder, not new research:** the BLE packet format was
+  previously specified (`research/hardware/microbit-ble-link.md`) as unsigned absolute angles
+  (0–1800 = 0.0–180.0°). That's inconsistent with `computeGimbalCorrection.ts` (already ✅
+  verified, written after that research note), which deliberately outputs signed **deltas**. Fixed
+  to two big-endian signed int16 deltas (tenths of a degree) in the research file, `docs/PRD.md`
+  §7, and `src/ble/index.md` — all three updated together, not just the code.
+- `.claude/skills/gimbal-control-firmware/scripts/microbit_gimbal_control.py` reuses the exact
+  PCA9685 register-writing approach already used (and documented as correct) in
+  `servo-bounds-test/scripts/microbit_servo_sweep.py`, to avoid the centiseconds-vs-milliseconds
+  unit trap `research/hardware/pca9685-servo-control.md` documents for extension-based PCA9685
+  libraries. Ships with a placeholder ±30° safe range — loudly marked in both the script and its
+  `SKILL.md` as needing `servo-bounds-test`'s real measurement before trusting it unattended.
+
+### CI build — ✅ verified
+Run `31762839976` (commit range `7688563`..`0bbb2d4` — camera fixes, BLE/control-loop, plan doc):
+success in 9m51s, auto-triggered by the push. Downloaded and inspected locally: valid zip,
+`Payload/athletecamerarobot.app/athletecamerarobot` (12.2MB executable) and a parseable
+`Info.plist` present. Artifact grew to 14.3MB (from 14.1MB) — consistent with `expo-media-library`
+now actually being used and `react-native-ble-plx` now actually being imported (both were config
+plugins already present in `app.json`, but this is the first commit that imports either package
+from `src/`). **This is the build for the next phone test.**
+
+### PRD/BOM status — ✅ verified (as a documentation change; the underlying fact is user-reported, not agent-observed)
+`docs/PRD.md` §2.2/§8 updated: the user directly confirmed the PCA9685 is now acquired and wired,
+moved off the "Needed" list. The dedicated battery/power bank remains explicitly flagged as
+**unconfirmed** — not assumed resolved just because other hardware is ready. See
+`docs/ROBOT_INTEGRATION_PLAN.md`'s prerequisites checklist, which exists specifically so this
+doesn't get missed before the first powered servo test.
+
+### What this whole entry does NOT prove
+- Whether either camera fix actually resolves the reported symptoms on the real device.
+- Whether Photos saving actually works on-device (permission prompt, real disk I/O, real
+  `expo-media-library` native module — none of this can be exercised off-device).
+- **Anything at all about BLE/servo/firmware working in reality.** Every claim in the BLE section
+  above is "matches the real library's types and this project's own prior research," never
+  "observed working." `testing/REAL_HARDWARE_TEST_LOG.md` still has zero fully-human-run entries.
+
+## Open items for the next contributor
+
+*(Replaces the 2026-08-13 evening list above — that list's items 1-2, 4-6 are superseded by this
+one; item 7 (buy the PCA9685) is done.)*
+
+1. **Next phone test** (install run `31762839976`'s artifact, per `docs/YOUR_STEPS.md`): check,
+   in order — (a) back camera box now correctly positioned; (b) front camera still correct; (c) a
+   recording actually appears in the Photos app; (d) `BleStatusBadge` shows `BLE: OFF` or
+   `BLE: SCANNING…` sensibly even with no micro:bit powered on nearby (i.e. it doesn't crash).
+2. **Then follow `docs/ROBOT_INTEGRATION_PLAN.md` in order**: `ble-ping` → `servo-bounds-test`
+   (replace the firmware's placeholder safe-range constants with the real measurement) →
+   `gimbal-control-firmware` manual sanity check → full field test with the phone mounted.
+3. **Confirm the battery/power bank for the robot electronics** before any powered servo test —
+   flagged unconfirmed in `docs/PRD.md` §8, not resolved by tonight's PCA9685 confirmation.
+4. Keep using `.claude/skills/webcam-detection-preview/` for any further camera/overlay
+   iteration — still the fastest loop for anything not BLE/VisionCamera-specific.
+5. **Log whatever happens in `testing/REAL_HARDWARE_TEST_LOG.md` and `testing/field-tests/`** —
+   only a human can write real hardware results there (`CLAUDE.md` §5.2).
+6. Everything in `docs/PRD.md` marked FUTURE/STRETCH is still not started — do not begin it
+   without the user explicitly asking, per `CLAUDE.md` §4 and §7.
+
+**Standing reminder:** as of 2026-08-14 night, two on-device reports exist. Both this round's
+fixes (back-camera rotation, Photos saving) are implemented and laptop/typecheck-verified as far
+as possible but **not yet confirmed on the device.** The entire BLE/robot side (transport,
+control loop, firmware) is new tonight and has had **zero contact with real hardware** — treat
+every claim about it as a design/implementation claim, not a working-system claim, until
+`docs/ROBOT_INTEGRATION_PLAN.md` has actually been run.

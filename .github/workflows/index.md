@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 7 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 8 times |
 
-## Status: ✅ verified green, 7/7 runs, most recently 2026-08-13 (night — deterministic mirroring fix)
+## Status: ✅ verified green, 8/8 runs, most recently 2026-08-14 (night — camera fixes + BLE/control loop)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -29,12 +29,27 @@ Triggered four times via `gh workflow run` / an automatic `push` trigger:
   archives cleanly — says nothing about whether recording actually works at runtime.
 - Run `31750739831` (commit `0994313` — mirror-correction switched from `Frame.isMirrored` to
   the resolved `CameraDevice.position`): success in 8m0s, auto-triggered by the push. Artifact
-  still 14.1 MB (no native surface changed, just which signal drives a JS-side boolean). **This
-  is the build to install for Phone Test #2.**
+  still 14.1 MB (no native surface changed, just which signal drives a JS-side boolean). This was
+  the build installed for Phone Test #2 — see its result below.
+- Run `31762839976` (commits `7688563`..`0bbb2d4` — back-camera box rotation fix, Photos-library
+  recording via `expo-media-library`, the full BLE transport + gimbal control loop, and the
+  micro:bit production firmware skill): success in 9m51s, auto-triggered by the push. Artifact
+  grew to 14.3 MB (from 14.1 MB) — the first commit that actually *imports*
+  `expo-media-library`/`react-native-ble-plx` from `src/`, not just lists them as config plugins.
+  **This is the build to install for the next phone test** — see
+  `docs/ROBOT_INTEGRATION_PLAN.md` for what to check.
 
-All seven produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
+**Phone Test #2 result** (reported by the developer, logged in full in
+`docs/VERIFICATION_REPORT.md`'s 2026-08-14 entry): front camera tracking was correct; the back
+camera's box was wrong on both axes at once (not just mirrored) — traced to a missing box
+*rotation* step for `Frame.orientation` (only the aspect ratio was ever corrected, never the
+box's own x/y), now fixed and included in run `31762839976` above. Recording itself worked but
+nothing reached the Photos app, as expected for that build (temp-file-only) — also fixed in the
+same run.
+
+All eight produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
 zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
-`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all seven
+`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all eight
 runs** — none of the "likely first failures" predicted below have occurred yet. Full detail in
 `docs/VERIFICATION_REPORT.md`.
 
