@@ -42,7 +42,8 @@ wired (motors + servos physically connected). Software has not been started.
   - 2 screw-terminal motor outputs (used for the 2 drive motors).
   - 2 servo headers (used for the 2 gimbal servos: roll + pitch).
   - A **Qwiic (I2C) connector**, confirmed present on the user's exact board.
-- **Servo expansion:** a **PCA9685 16-channel I2C PWM driver** board (not yet purchased) connects
+- **Servo expansion:** a **PCA9685 16-channel I2C PWM driver** board (acquired and wired,
+  per §8 — confirmed 2026-08-14) connects
   to the moto:bit's Qwiic/I2C port. This is needed because the moto:bit only exposes 2 servo
   channels but the robot has 3 servos (2 gimbal + 1 steering). The PCA9685 gives 16 channels, so
   all 3 servos can be driven from it if convenient, or it can be used just for the steering servo
@@ -260,10 +261,12 @@ disagrees.)*
   no Mac. See `research/computer-vision/person-detection-model-choice.md`.
 - ~~GitHub Actions workflow YAML~~ → written, never run. See §3.2.
 - **PROVISIONAL — BLE message format:** fixed 4-byte packet
-  `[roll_hi, roll_lo, pitch_hi, pitch_lo]`, two big-endian uint16 angles in tenths of a degree.
-  Fixed width so the receiver never handles partial messages. Over the Nordic UART service to
-  start — simplest thing that can be debugged. Rate-limit sends to **10–20 Hz**, never per-frame.
-  See `research/hardware/microbit-ble-link.md`.
+  `[roll_hi, roll_lo, pitch_hi, pitch_lo]`, two big-endian **signed int16 deltas** (tenths of a
+  degree) — corrected 2026-08-14 from an earlier unsigned-absolute-angle draft that couldn't
+  represent a negative correction; see `research/hardware/microbit-ble-link.md`'s correction
+  note. Fixed width so the receiver never handles partial messages. Over the Nordic UART service
+  to start — simplest thing that can be debugged. Rate-limit sends to **10–20 Hz**, never
+  per-frame.
 - **PROVISIONAL — servo wiring split:** put **all three servos on the PCA9685**. One code path,
   one timing model, one power rail. See `research/hardware/pca9685-servo-control.md`.
 
@@ -275,9 +278,14 @@ disagrees.)*
 - 2x DC drive motors, 1x steering servo, 2x gimbal servos (roll + pitch) — physically wired.
 - BBC micro:bit.
 - SparkFun moto:bit carrier board (confirmed has Qwiic/I2C breakout).
+- **PCA9685 16-channel I2C PWM servo driver — acquired and wired, per direct user confirmation
+  2026-08-14.** Moves off the "Needed" list below (was previously listed as not yet purchased).
 - ELEGOO UNO R3 Most Complete Starter Kit (spare/backup, not in primary design).
 - iPhone 16 (non-Pro) — the camera + CV + control app device.
 
 **Needed:**
-- PCA9685 16-channel I2C PWM servo driver (~$7) — see link in §2.2.
-- Dedicated battery/power bank for robot electronics (separate from phone).
+- Dedicated battery/power bank for robot electronics (separate from phone). **Status unconfirmed
+  as of 2026-08-14** — the user confirmed "micro:bit + PCA9685 + gimbal wired" but did not
+  explicitly confirm a power source; do not assume this is resolved. Confirm before the first
+  powered servo test (`.claude/skills/servo-bounds-test/`) — see
+  `docs/ROBOT_INTEGRATION_PLAN.md`'s prerequisites checklist.

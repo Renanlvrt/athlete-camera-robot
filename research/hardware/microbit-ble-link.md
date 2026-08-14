@@ -96,11 +96,34 @@ Fixed **4 bytes**, no delimiters, no parsing ambiguity:
 [roll_hi, roll_lo, pitch_hi, pitch_lo]
 ```
 
-Two big-endian uint16s, each an angle in tenths of a degree (0–1800 = 0.0–180.0°). Fixed width
-means the receiver never has to handle partial messages or scan for terminators.
-
 This closes one of `docs/PRD.md` §7's open questions — **provisionally**. It is a proposal from
 research, not a tested protocol. Confirm with `ble-ping` before treating it as settled.
+
+#### ⚠️ Correction, 2026-08-14 — signed deltas, not unsigned absolute angles
+
+The original version of this section specified "two big-endian **uint16**s, each an angle in
+tenths of a degree (**0–1800 = 0.0–180.0°**)" — i.e. unsigned absolute angles. That is
+**inconsistent with `src/tracking/computeGimbalCorrection.ts`**, written and ✅-verified after
+this research note, which was deliberately designed to output **deltas** (`GimbalCorrection.
+rollDelta`/`pitchDelta`), not absolute angles — see that file's doc comment: "the phone does not
+know the true servo position... the micro:bit owns absolute position and applies these
+increments against its own clamps." A delta can be negative (e.g. "move 3° left"); an unsigned
+0–1800 range cannot represent that at all.
+
+Caught while building `src/ble/encodeGimbalPacket.ts` (task: wiring the control loop to BLE for
+the first time) — nothing had implemented this packet before, so nothing was silently broken,
+but writing the encoder is what forced reconciling the two documents.
+
+**Corrected format:** two big-endian **signed int16**s (two's complement), each a **delta** in
+tenths of a degree. Range ±3276.7°, vastly more than ever needed — `defaultGimbalTuning.maxStep`
+(`src/tracking/types.ts`) caps real deltas at ±5.0° (±50 in this encoding) — the wide range is
+just "plain signed 16-bit integer," not a deliberately chosen limit. The micro:bit firmware reads
+each half as a signed big-endian 16-bit integer, divides by 10 for degrees, and **adds it to its
+own running absolute position** (then clamps to the mechanical limits from
+`.claude/skills/servo-bounds-test/`) — the phone never sends or knows an absolute angle.
+
+Still provisional — this is a correction to the proposal, not a hardware-confirmed protocol.
+Confirm with `ble-ping` / the first real servo-control test before treating it as settled.
 
 ### Send rate — important
 
