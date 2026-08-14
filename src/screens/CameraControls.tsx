@@ -2,12 +2,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
 import type { CameraFacing } from '../hooks/useCameraSetup';
-import type { RecordingStatus } from '../hooks/useVideoRecording';
+import type { RecordingStatus, SaveStatus } from '../hooks/useVideoRecording';
 
 interface CameraControlsProps {
   readonly facing: CameraFacing;
   readonly onToggleFacing: () => void;
   readonly recordingStatus: RecordingStatus;
+  readonly saveStatus: SaveStatus;
   readonly onStartRecording: () => void;
   readonly onStopRecording: () => void;
 }
@@ -18,6 +19,17 @@ const RECORD_LABEL: Record<RecordingStatus, string> = {
   recording: '● REC',
   stopping: 'STOPPING…',
   error: 'RECORDING FAILED',
+};
+
+/**
+ * Only shown while `recordingStatus` is `'idle'` (see the render below) — so
+ * this never fights with the record-state label above for the same slot.
+ */
+const SAVE_LABEL: Record<SaveStatus, string> = {
+  idle: '',
+  saving: 'SAVING TO PHOTOS…',
+  saved: 'SAVED TO PHOTOS',
+  error: 'SAVE TO PHOTOS FAILED',
 };
 
 /**
@@ -36,11 +48,16 @@ export function CameraControls({
   facing,
   onToggleFacing,
   recordingStatus,
+  saveStatus,
   onStartRecording,
   onStopRecording,
 }: CameraControlsProps): React.ReactElement {
   const isRecording = recordingStatus === 'recording';
   const isBusy = recordingStatus === 'starting' || recordingStatus === 'stopping';
+  // Only show the save label once recording itself is idle — while
+  // starting/recording/stopping, that label owns this slot instead.
+  const statusText =
+    recordingStatus === 'idle' ? SAVE_LABEL[saveStatus] : RECORD_LABEL[recordingStatus];
 
   const handleRecordPress = (): void => {
     if (isBusy) return;
@@ -58,9 +75,7 @@ export function CameraControls({
       </Pressable>
 
       <View style={styles.recordWrap}>
-        {RECORD_LABEL[recordingStatus] !== '' && (
-          <Text style={styles.recordStatusText}>{RECORD_LABEL[recordingStatus]}</Text>
-        )}
+        {statusText !== '' && <Text style={styles.recordStatusText}>{statusText}</Text>}
         <Pressable
           style={[styles.recordButtonOuter, isBusy && styles.recordButtonOuterBusy]}
           onPress={handleRecordPress}

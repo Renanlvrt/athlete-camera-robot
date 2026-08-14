@@ -8,7 +8,7 @@ import { runOnJS } from 'react-native-worklets';
 import { useResizer } from 'react-native-vision-camera-resizer';
 import { useTensorflowModel } from 'react-native-fast-tflite';
 
-import { decodeDetections } from '../tracking/decodeDetections';
+import { decodeDetections, type BufferOrientation } from '../tracking/decodeDetections';
 import type { PersonBox } from '../tracking/types';
 
 /**
@@ -60,6 +60,15 @@ import type { PersonBox } from '../tracking/types';
  * simple, deterministic, and fully within this app's own control: back
  * camera is defined to never mirror, front camera always does. See
  * `docs/VERIFICATION_REPORT.md`'s 2026-08-13 entries for the full history.
+ *
+ * BACK-CAMERA ROTATION (fixed 2026-08-14): `frame.orientation` is now passed
+ * straight through to `decodeDetections` every frame, which rotates the raw
+ * box (x, y) into upright space before mirroring — see
+ * `src/tracking/decodeDetections.ts`'s `orientBox`. This closes the gap the
+ * previous version left open (only the frame's aspect ratio was corrected
+ * for a 90° rotation; the box's own position never was, and 180° wasn't
+ * handled at all). A real on-device report showed the back camera's box
+ * wrong on both axes simultaneously — the signature of exactly this gap.
  */
 
 const MODEL_INPUT_SIZE = 300;
@@ -103,8 +112,13 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
   const isMirrored = cameraPosition === 'front';
 
   const publishDetections = useCallback(
-    (rawBoxes: number[], rawClasses: number[], rawScores: number[]) => {
-      setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores, { isMirrored }));
+    (
+      rawBoxes: number[],
+      rawClasses: number[],
+      rawScores: number[],
+      orientation: BufferOrientation,
+    ) => {
+      setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores, { isMirrored, orientation }));
     },
     [isMirrored],
   );
@@ -115,18 +129,10 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
     // A 'left'/'right' orientation means the raw buffer is rotated 90°
     // relative to how it will actually be displayed — swap the dimensions so
     // the aspect ratio matches what's on screen, not the raw sensor buffer.
-    //
-    // NOT YET SUFFICIENT ON ITS OWN if orientation really is rotated: this
-    // only corrects the ASPECT RATIO used for the 'cover'-fit scale in
-    // frameLayout.ts. The detection box's own (x, y) coordinates from
-    // decodeDetections.ts are still in the RAW buffer's coordinate space —
-    // if orientation ever comes back 'left'/'right' on the real device, the
-    // box's position (not just the overall scale) would also need a 90°
-    // coordinate rotation before frameLayout.ts's math, which isn't
-    // implemented yet. This can't be exercised or verified from a laptop
-    // webcam (no orientation-metadata rotation there) — if the box is still
-    // wrong after this fix, log `frame.orientation` on-device and check here
-    // first before assuming anything else.
+    // The box's own (x, y) rotation is handled separately, in
+    // decodeDetections.ts's orientBox (see publishDetections below) — this
+    // function only corrects the aspect ratio used for frameLayout.ts's
+    // 'cover'-fit scale.
     setFrameAspectRatio(isRotated ? height / width : width / height);
   }, []);
 
@@ -156,7 +162,7 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
       const rawBoxes = Array.from(new Float32Array(outputs[0]));
       const rawClasses = Array.from(new Float32Array(outputs[1]));
       const rawScores = Array.from(new Float32Array(outputs[2]));
-      runOnJS(publishDetections)(rawBoxes, rawClasses, rawScores);
+      runOnJS(publishDetections)(rawBoxes, rawClasses, rawScores, frame.orientation);
 
       frame.dispose();
     },

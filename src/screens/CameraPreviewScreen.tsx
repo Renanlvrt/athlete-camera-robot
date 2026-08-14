@@ -9,10 +9,12 @@ import {
 
 import type { CameraFacing } from '../hooks/useCameraSetup';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
-import type { RecordingStatus } from '../hooks/useVideoRecording';
+import type { RecordingStatus, SaveStatus } from '../hooks/useVideoRecording';
+import type { BleConnectionState } from '../ble/useBleConnection';
 import type { PersonBox } from '../tracking/types';
 import { CameraControls } from './CameraControls';
 import { TrackingOverlay } from './TrackingOverlay';
+import { BleStatusBadge } from './BleStatusBadge';
 
 interface CameraPreviewScreenProps {
   readonly device: CameraDevice;
@@ -24,8 +26,10 @@ interface CameraPreviewScreenProps {
   readonly onToggleFacing: () => void;
   readonly videoOutput: CameraVideoOutput;
   readonly recordingStatus: RecordingStatus;
+  readonly saveStatus: SaveStatus;
   readonly onStartRecording: () => void;
   readonly onStopRecording: () => void;
+  readonly bleState: BleConnectionState;
 }
 
 /**
@@ -51,8 +55,10 @@ export function CameraPreviewScreen({
   onToggleFacing,
   videoOutput,
   recordingStatus,
+  saveStatus,
   onStartRecording,
   onStopRecording,
+  bleState,
 }: CameraPreviewScreenProps) {
   return (
     <View style={styles.container}>
@@ -63,10 +69,12 @@ export function CameraPreviewScreen({
         outputs={[frameOutput, videoOutput]}
       />
       <TrackingOverlay boxes={boxes} frameAspectRatio={frameAspectRatio} status={detectionStatus} />
+      <BleStatusBadge state={bleState} />
       <CameraControls
         facing={facing}
         onToggleFacing={onToggleFacing}
         recordingStatus={recordingStatus}
+        saveStatus={saveStatus}
         onStartRecording={onStartRecording}
         onStopRecording={onStopRecording}
       />

@@ -19,13 +19,13 @@ sending bytes to the robot (future `src/ble/`), or drawing anything (`src/screen
 | `selectPrimaryAthlete.ts` | file | Every detection → the one athlete to lock onto | ✅ verified |
 | `computeGimbalCorrection.ts` | file | Locked athlete's offset → roll/pitch deltas (proportional, clamped) | ✅ verified |
 | `computeTrackingReadout.ts` | file | Locked athlete's offset → human-readable distance/bearing + `isCentered`, for the on-screen UI | ✅ verified |
-| `decodeDetections.ts` | file | Raw SSD-MobileNet-V1 output tensors → `PersonBox[]`, filtered to the person class, with an `isMirrored` option that un-mirrors `x` for front-camera frames | ✅ verified |
+| `decodeDetections.ts` | file | Raw SSD-MobileNet-V1 output tensors → `PersonBox[]`, filtered to the person class, with an `orientation` option that rotates the box into upright space (for a non-`'up'` `Frame.orientation`) applied BEFORE an `isMirrored` option that un-mirrors `x` for front-camera frames | ✅ verified |
 | `selectPrimaryAthlete.test.ts` | file | 12 tests: confidence gating, largest-area, tie determinism, purity | ✅ verified |
 | `computeGimbalCorrection.test.ts` | file | 16 tests: sign convention, proportionality, deadband, step cap, NaN, convergence | ✅ verified |
 | `computeTrackingReadout.test.ts` | file | 12 tests: bearing convention in all 4 directions, buffer boundary, NaN/Infinity, purity | ✅ verified |
-| `decodeDetections.test.ts` | file | 16 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity, `isMirrored` flip on both sides of the frame | ✅ verified |
+| `decodeDetections.test.ts` | file | 23 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity, `isMirrored` flip on both sides of the frame, and all 4 `orientation` cases (identity, 180°, ±90° with dimension swap, rotation-then-mirror composition, post-rotation degenerate box) | ✅ verified |
 
-**Verified how:** `npm test` → 56/56 passing across this folder (73/73 repo-wide);
+**Verified how:** `npm test` → 63/63 passing across this folder (80/80 repo-wide);
 `npm run typecheck` → zero errors. Recorded in `docs/VERIFICATION_REPORT.md`. Note these tags
 cover the *logic*; the tuning **constants** and `PERSON_CLASS_ID`/tensor-order assumptions behind
 `decodeDetections.ts` are unvalidated against the real model running on real hardware until a
@@ -59,5 +59,7 @@ Nothing. No imports outside this folder — that isolation is what makes it test
 
 ## Depended on by
 `src/hooks/useAthleteDetection.ts` (`decodeDetections.ts`), `src/screens/TrackingOverlay.tsx`
-(`selectPrimaryAthlete.ts`, `computeTrackingReadout.ts`). Future `src/ble/` will transmit
-`computeGimbalCorrection.ts`'s output.
+(`selectPrimaryAthlete.ts`, `computeTrackingReadout.ts`). `src/ble/encodeGimbalPacket.ts` takes
+`types.ts`'s `GimbalCorrection` as input. `computeGimbalCorrection.ts` itself isn't called from
+anywhere yet — that's the still-missing control-loop hook that ties detection → selection →
+correction → `src/ble/`'s `send()` together (not yet built).

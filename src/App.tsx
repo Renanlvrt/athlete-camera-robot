@@ -1,6 +1,7 @@
 import { useCameraSetup } from './hooks/useCameraSetup';
 import { useAthleteDetection } from './hooks/useAthleteDetection';
 import { useVideoRecording } from './hooks/useVideoRecording';
+import { useGimbalControl } from './hooks/useGimbalControl';
 import { PermissionRequiredScreen } from './screens/PermissionRequiredScreen';
 import { NoCameraDeviceScreen } from './screens/NoCameraDeviceScreen';
 import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
@@ -14,10 +15,12 @@ import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
  * contain camera logic, styling, or permission/detection logic itself —
  * those live in src/hooks/ and src/screens/ respectively.
  *
- * useAthleteDetection() and useVideoRecording() are called unconditionally
- * (Rules of Hooks) even though their output is only rendered in the 'ready'
- * branch — model loading, frame-output, and video-output setup don't depend
- * on the camera device being resolved.
+ * useAthleteDetection(), useVideoRecording(), and useGimbalControl() are
+ * called unconditionally (Rules of Hooks) even though their output is only
+ * rendered in the 'ready' branch — model loading, frame-output, video-output
+ * setup, and the BLE connection attempt don't depend on the camera device
+ * being resolved (the robot link can come up before/independently of the
+ * camera permission flow).
  *
  * This is Stage 4 of the implementation plan (live preview + person
  * detection + tracking overlay). See docs/PRD.md §4 for the full roadmap and
@@ -31,6 +34,7 @@ export default function App() {
   const cameraPosition = setup.status === 'ready' ? setup.device.position : setup.facing;
   const detection = useAthleteDetection(cameraPosition);
   const recording = useVideoRecording();
+  const gimbalControl = useGimbalControl(detection.boxes);
 
   switch (setup.status) {
     case 'requesting-permission':
@@ -49,8 +53,10 @@ export default function App() {
           onToggleFacing={setup.toggleFacing}
           videoOutput={recording.videoOutput}
           recordingStatus={recording.status}
+          saveStatus={recording.saveStatus}
           onStartRecording={recording.startRecording}
           onStopRecording={recording.stopRecording}
+          bleState={gimbalControl.bleState}
         />
       );
   }

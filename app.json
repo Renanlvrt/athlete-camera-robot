@@ -18,6 +18,13 @@
           "modes": ["central"],
           "bluetoothAlwaysPermission": "Connect to the camera robot over Bluetooth to steer the gimbal."
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow access to your photos so recorded tracking footage can be saved.",
+          "savePhotosPermission": "Save recorded tracking footage to your Photos library."
+        }
       ]
     ],
     "ios": {

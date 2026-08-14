@@ -170,6 +170,95 @@ describe('decodeDetections', () => {
     });
   });
 
+  describe('orientation', () => {
+    // A box hugging the top-left corner, deliberately asymmetric
+    // (width !== height) so a width/height swap bug would be caught.
+    const cornerBox: [number, number, number, number] = [0.0, 0.0, 0.5, 0.3]; // [ymin,xmin,ymax,xmax]
+
+    it('leaves the box unchanged for orientation "up" (default)', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
+      ]);
+      const withDefault = decodeDetections(boxes, classes, scores)[0];
+      const withExplicitUp = decodeDetections(boxes, classes, scores, { orientation: 'up' })[0];
+      for (const result of [withDefault, withExplicitUp]) {
+        expect(result?.x).toBeCloseTo(0);
+        expect(result?.y).toBeCloseTo(0);
+        expect(result?.width).toBeCloseTo(0.3);
+        expect(result?.height).toBeCloseTo(0.5);
+      }
+    });
+
+    it('rotates 180° for orientation "down" — point reflection, no dimension swap', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
+      ]);
+      const result = decodeDetections(boxes, classes, scores, { orientation: 'down' })[0];
+      expect(result?.x).toBeCloseTo(0.7);
+      expect(result?.y).toBeCloseTo(0.5);
+      expect(result?.width).toBeCloseTo(0.3);
+      expect(result?.height).toBeCloseTo(0.5);
+    });
+
+    it('rotates -90° (CCW) for orientation "right", swapping width/height', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
+      ]);
+      const result = decodeDetections(boxes, classes, scores, { orientation: 'right' })[0];
+      expect(result?.x).toBeCloseTo(0);
+      expect(result?.y).toBeCloseTo(0.7);
+      expect(result?.width).toBeCloseTo(0.5);
+      expect(result?.height).toBeCloseTo(0.3);
+    });
+
+    it('rotates +90° (CW) for orientation "left", swapping width/height', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
+      ]);
+      const result = decodeDetections(boxes, classes, scores, { orientation: 'left' })[0];
+      expect(result?.x).toBeCloseTo(0.5);
+      expect(result?.y).toBeCloseTo(0);
+      expect(result?.width).toBeCloseTo(0.5);
+      expect(result?.height).toBeCloseTo(0.3);
+    });
+
+    it('"right" and "left" land the same corner-hugging box on opposite corners', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
+      ]);
+      const right = decodeDetections(boxes, classes, scores, { orientation: 'right' })[0];
+      const left = decodeDetections(boxes, classes, scores, { orientation: 'left' })[0];
+      expect(right?.x).not.toBeCloseTo(left?.x ?? NaN);
+      expect(right?.y).not.toBeCloseTo(left?.y ?? NaN);
+    });
+
+    it('applies rotation before mirroring (composes, does not conflict)', () => {
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
+      ]);
+      // Rotate 'right' alone: x=0, width=0.5 -> mirrored: x = 1 - 0 - 0.5 = 0.5
+      const result = decodeDetections(boxes, classes, scores, {
+        orientation: 'right',
+        isMirrored: true,
+      })[0];
+      expect(result?.x).toBeCloseTo(0.5);
+      expect(result?.y).toBeCloseTo(0.7);
+      expect(result?.width).toBeCloseTo(0.5);
+      expect(result?.height).toBeCloseTo(0.3);
+    });
+
+    it('drops a box that becomes degenerate only after rotation, without throwing', () => {
+      // A zero-width raw box stays zero-width under any rotation.
+      const { boxes, classes, scores } = detectionSet([
+        { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.2, 0.3, 0.2, 0.6] },
+      ]);
+      expect(() =>
+        decodeDetections(boxes, classes, scores, { orientation: 'left' }),
+      ).not.toThrow();
+      expect(decodeDetections(boxes, classes, scores, { orientation: 'left' })).toEqual([]);
+    });
+  });
+
   it('is a pure function — does not mutate its input', () => {
     const { boxes, classes, scores } = detectionSet([
       { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: [0.1, 0.1, 0.5, 0.5] },
