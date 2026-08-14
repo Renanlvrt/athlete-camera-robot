@@ -12,6 +12,69 @@ behaviour as working.** Every step here ends with "report back to `testing/`" �
 boilerplate, it's the actual gate. Nothing in this document becomes `✅ verified` until a human
 runs it and reports.
 
+## How the phone ↔ micro:bit connection actually works, step by step
+
+This is the mechanism, for context before touching hardware — not a new procedure, everything
+below is already built (`src/ble/`) or already flashed as firmware skills. Written because
+"plan the connection" was asked directly; skip to §1 if you just want the current status.
+
+**BLE, not WiFi.** Bluetooth Low Energy is a short-range radio link (roughly room-sized range,
+much lower power than WiFi) designed for exactly this kind of small, frequent command packet —
+not for streaming video or large files. The micro:bit has no WiFi hardware at all, only BLE.
+
+**GATT — the data model BLE uses.** A BLE peripheral (the micro:bit) exposes named
+**characteristics** grouped into **services**. This project uses one standard, pre-defined
+service — the **Nordic UART Service** — which exposes two characteristics: one the phone writes
+into (RX, from the micro:bit's perspective) and one the phone can listen to (TX). It behaves like
+a simple two-way pipe of bytes, which is why it's the easiest thing to debug first
+(`research/hardware/microbit-ble-link.md`).
+
+**What happens when the app is opened, in order:**
+1. **Central vs peripheral.** The phone is always the one that goes looking (**central**); the
+   micro:bit sits there advertising its presence (**peripheral**) and waits. This direction never
+   reverses.
+2. **Bluetooth radio check.** `useBleConnection.ts` first waits for the phone's Bluetooth radio
+   itself to report ready (`State.PoweredOn`) — if Bluetooth is off on the phone, or the app
+   isn't authorized, the app shows that directly (`BLE: OFF` / `BLE: NOT AUTHORIZED`) rather than
+   silently doing nothing.
+3. **Scanning.** Once ready, the phone scans specifically for devices advertising the Nordic UART
+   service UUID (not a broad "list everything nearby" scan — narrower, faster, less battery).
+   `BleStatusBadge` shows `BLE: SCANNING…` during this.
+4. **The micro:bit must be advertising to be found.** This only happens once the gimbal-control
+   firmware (or `ble-ping`'s echo script, for the bench test) is actually flashed and running —
+   nothing to scan for otherwise. The micro:bit's own display shows `B` while it's advertising,
+   waiting for the phone.
+5. **Connect + discover.** The instant the phone's scan sees the right advertisement, it stops
+   scanning, connects, and asks the micro:bit what services/characteristics it actually has
+   (`discoverAllServicesAndCharacteristicsForDevice`) — this confirms the Nordic UART
+   characteristics are really there before anything tries to write to them. `BLE: CONNECTING…`
+   covers this.
+6. **Connected — the steady state.** `BLE: CONNECTED` on the badge, `C` on the micro:bit's
+   display. From here, every ~1/15th of a second (`useGimbalControl.ts`'s rate limit, matching
+   PRD §7's 10-20Hz requirement), if there's a locked athlete, the phone encodes a correction
+   into the 4-byte packet and writes it to the RX characteristic — "without response," meaning it
+   doesn't wait for an acknowledgment before the next frame can be processed (occasional dropped
+   packets are expected and fine; the next one supersedes it).
+7. **Reconnecting automatically.** If the link drops unexpectedly (walking out of range, the
+   gimbal's own movement briefly disrupting the radio, a momentary hiccup) — not the app
+   deliberately disconnecting — the phone notices via `onDeviceDisconnected`, shows
+   `BLE: LOST — RECONNECTING…`, and automatically restarts scanning every 3 seconds until it
+   finds the micro:bit again. **This didn't exist until tonight** — it was added specifically
+   because "make the connection work" implies surviving a transient drop, not just the first
+   connect. No app relaunch needed for a normal, brief drop.
+
+**No pairing.** `ble-ping`'s echo script explicitly disables BLE pairing (`pairing=False`) to
+keep the bench test simple, and the gimbal firmware follows the same pattern — there's no PIN
+exchange or trusted-device list involved, the phone just connects directly by service UUID every
+time. Fine for this project's threat model (a robot on a private network of one phone + one
+micro:bit); would need revisiting only if this were ever a multi-device or security-sensitive
+scenario, which it isn't.
+
+**What can't be planned further, only tested:** whether the real signal range/reliability is
+good enough while the robot is actually moving and the phone is mounted on top of it (a very
+different RF environment than a bench test), and how long a real reconnect actually takes in
+practice. Both are exactly what `ble-ping` and the full field test (§3.4) exist to answer.
+
 ## 1. Where things actually stand right now
 
 **Phone app side — code exists, typechecks, unit-tested where testable, NONE of it run against
@@ -22,7 +85,7 @@ real BLE hardware:**
 | Decide who to follow | `src/tracking/selectPrimaryAthlete.ts` | Largest confident box wins (MVP heuristic, PRD §4.2) |
 | Decide how far to move | `src/tracking/computeGimbalCorrection.ts` | Proportional control, deadband, step-limited — outputs a **delta**, not an absolute angle |
 | Encode for the wire | `src/ble/encodeGimbalPacket.ts` | Delta (degrees) → 4-byte signed packet |
-| Talk to the micro:bit | `src/ble/useBleConnection.ts` | Scan/connect/discover/write over Nordic UART |
+| Talk to the micro:bit | `src/ble/useBleConnection.ts` | Scan/connect/discover/write over Nordic UART, auto-reconnects (3s retry) after an unexpected drop |
 | Tie it together, rate-limited | `src/hooks/useGimbalControl.ts` | ~15Hz, per PRD §7's 10-20Hz requirement |
 | Show it's working | `src/screens/BleStatusBadge.tsx` | On-screen `BLE: CONNECTED` / `SCANNING…` / etc. |
 
@@ -35,8 +98,10 @@ real BLE hardware:**
 | Actually drive the gimbal | `.claude/skills/gimbal-control-firmware/scripts/microbit_gimbal_control.py` | Receives the phone's packets, drives PCA9685 — **ships with a placeholder safe range**, see §3 |
 
 **Hardware — per the user's direct confirmation tonight:** micro:bit, PCA9685, and both gimbal
-servos are physically wired. **Unconfirmed:** a dedicated battery/power bank for the electronics
-(separate from the phone) — see the prerequisites checklist below. Do not assume this is solved.
+servos are physically wired. Power source identified — a Bextoo 27,000mAh USB power bank —
+electrically plausible for Phase 1 but genuinely untested; see §2 and
+`research/hardware/pca9685-servo-control.md`'s power section. Micro:bit revision (v1 vs v2) not
+yet confirmed — see §2's checklist for exactly how to check.
 
 ## 2. Prerequisites checklist — confirm before starting §3
 
@@ -44,15 +109,23 @@ servos are physically wired. **Unconfirmed:** a dedicated battery/power bank for
       motors should stay unpowered through this entire plan.
 - [ ] **Phone removed from the gimbal mount** for every step except the very last (§3.4). You
       are deliberately driving servos toward untested limits; don't risk the phone.
-- [ ] **Dedicated battery/power bank for the robot electronics, confirmed present and charged.**
-      This is the one item from `docs/PRD.md` §8's BOM that is still genuinely unconfirmed as of
-      tonight. If it's not sorted, stop here and sort it before §3 — running servos off anything
-      underpowered is exactly the brownout scenario `research/hardware/power-brownout-risk.md`
-      warns about, and it can reset the micro:bit mid-test in a way that's easy to misdiagnose
-      as a code bug.
-- [ ] **Battery disconnect within reach** for the servo-related steps (§3.2, §3.3, §3.4).
-- [ ] micro:bit revision known (v1 or v2) — v1 has much less flash for the BLE stack; if
-      `bluetooth` import fails on-device, that's why (see `ble-ping`'s script comments).
+- [ ] **Power bank connected to the PCA9685's V+/GND screw terminals via a USB breakout or cut
+      cable** (not a direct USB plug — the PCA9685 has no USB port). See
+      `research/hardware/pca9685-servo-control.md`'s "This project's actual power source"
+      section for the exact wiring and why 5V is fine voltage-wise for the servos. Confirm common
+      ground with the moto:bit (already satisfied if the Qwiic cable is intact — it carries its
+      own ground wire).
+- [ ] **Battery disconnect within reach** for the servo-related steps (§3.2, §3.3, §3.4). For a
+      USB power bank this just means "unplug the USB cable" — confirm that's physically easy to
+      do quickly, not buried under other wiring.
+- [ ] **Micro:bit revision identified (v1 or v2)** — matters because v1 has much less flash for
+      the BLE stack; if `bluetooth` import fails when flashing, that's almost certainly why (see
+      `ble-ping`'s script comments). Check by looking at the **back of the board** for "V1" or
+      "V2" printed directly on it — the definitive check. A secondary hint: v2 boards have a
+      **built-in capacitive touch sensor on the front gold logo** (tapping it works like a
+      button) and a small round speaker/mic grille near the edges; v1 boards have neither. If the
+      logo responds to touch, that's a strong sign it's a v2, but check the back printing to be
+      certain before assuming.
 - [ ] The phone has the latest build installed (§4 covers triggering that build).
 
 ## 3. Sequencing — do these in order, each is a real gate for the next

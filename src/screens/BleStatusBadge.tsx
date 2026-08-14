@@ -13,7 +13,7 @@ const LABEL: Record<BleConnectionState['status'], string> = {
   scanning: 'BLE: SCANNING…',
   connecting: 'BLE: CONNECTING…',
   connected: 'BLE: CONNECTED',
-  'connection-lost': 'BLE: LOST',
+  'connection-lost': 'BLE: LOST — RECONNECTING…',
   error: 'BLE: ERROR',
 };
 

@@ -30,6 +30,19 @@ import { bytesToBase64 } from './base64';
  * this project's actual situation. Revisit (filter by advertised name) only
  * if multiple micro:bits are ever in range at once — not a real problem yet.
  *
+ * AUTO-RECONNECT (added 2026-08-14): a real BLE link can drop for reasons
+ * that are expected to be transient during normal filming — the gimbal
+ * physically moving the phone, someone walking a few steps out of range,
+ * a momentary radio hiccup. Treating `'connection-lost'` as terminal would
+ * mean every one of those requires relaunching the app. Instead, a dropped
+ * connection (`onDeviceDisconnected` firing with a non-null error) schedules
+ * a rescan after `RECONNECT_DELAY_MS`, which repeats indefinitely until
+ * either it reconnects or the component unmounts. Deliberately a flat delay,
+ * not exponential backoff — simplest thing that recovers the common
+ * transient case; revisit only if real testing shows this thrashes battery
+ * or logs against a genuinely-gone robot (e.g. powered off, out of range for
+ * the rest of the session).
+ *
  * UNVERIFIED — CANNOT BE VERIFIED WITHOUT REAL HARDWARE (`CLAUDE.md` §5.2).
  * This hook has never connected to a real micro:bit. It typechecks and is
  * written directly against the real API, but "an agent may never mark a
@@ -42,12 +55,16 @@ export const NORDIC_UART_SERVICE_UUID = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 /** Nordic UART RX characteristic — the phone WRITES gimbal commands here. */
 export const NORDIC_UART_RX_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 
+/** Flat retry interval after a dropped connection — see the doc comment above on AUTO-RECONNECT. */
+const RECONNECT_DELAY_MS = 3000;
+
 export type BleConnectionState =
   | { readonly status: 'waiting-for-bluetooth' }
   | { readonly status: 'unauthorized' }
   | { readonly status: 'scanning' }
   | { readonly status: 'connecting' }
   | { readonly status: 'connected' }
+  /** Transient — a rescan is already scheduled/in flight, no action needed from the caller. */
   | { readonly status: 'connection-lost'; readonly error: BleError }
   | { readonly status: 'error'; readonly error: Error };
 
@@ -78,6 +95,7 @@ export function useBleConnection(): BleConnectionResult {
     const manager = managerRef.current as BleManager;
     let disconnectSubscription: Subscription | undefined;
     let cancelled = false;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const connect = async (device: Device): Promise<void> => {
       setState({ status: 'connecting' });
@@ -91,9 +109,10 @@ export function useBleConnection(): BleConnectionResult {
         disconnectSubscription = manager.onDeviceDisconnected(connected.id, (error) => {
           deviceRef.current = undefined;
           // error === null means THIS app called cancelDeviceConnection
-          // (deliberate teardown, e.g. unmount) — nothing to surface.
-          if (error != null) {
+          // (deliberate teardown, e.g. unmount) — nothing to surface, no retry.
+          if (error != null && !cancelled) {
             setState({ status: 'connection-lost', error });
+            reconnectTimeout = setTimeout(startScanning, RECONNECT_DELAY_MS);
           }
         });
       } catch (thrown) {
@@ -102,6 +121,21 @@ export function useBleConnection(): BleConnectionResult {
           setState({ status: 'error', error });
         }
       }
+    };
+
+    const startScanning = (): void => {
+      if (cancelled) return;
+      setState({ status: 'scanning' });
+      manager.startDeviceScan([NORDIC_UART_SERVICE_UUID], null, (error, device) => {
+        if (cancelled) return;
+        if (error != null) {
+          setState({ status: 'error', error });
+          return;
+        }
+        if (device == null) return;
+        manager.stopDeviceScan();
+        void connect(device);
+      });
     };
 
     const stateSubscription = manager.onStateChange((bleState) => {
@@ -114,21 +148,12 @@ export function useBleConnection(): BleConnectionResult {
         setState({ status: 'waiting-for-bluetooth' });
         return;
       }
-      setState({ status: 'scanning' });
-      manager.startDeviceScan([NORDIC_UART_SERVICE_UUID], null, (error, device) => {
-        if (cancelled) return;
-        if (error != null) {
-          setState({ status: 'error', error });
-          return;
-        }
-        if (device == null) return;
-        manager.stopDeviceScan();
-        void connect(device);
-      });
+      startScanning();
     }, true);
 
     return () => {
       cancelled = true;
+      if (reconnectTimeout != null) clearTimeout(reconnectTimeout);
       stateSubscription.remove();
       disconnectSubscription?.remove();
       manager.stopDeviceScan().catch(() => {});

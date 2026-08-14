@@ -20,7 +20,7 @@ the actual micro:bit, which hasn't happened. Every status below is "implemented,
 | `base64.test.ts` | file | Empty input, 12 byte-length cases matched against `Buffer.toString('base64')`, exact padding shape for a 4-byte packet, purity | ✅ verified |
 | `encodeGimbalPacket.ts` | file | `GimbalCorrection` (degrees) → the fixed 4-byte wire packet (two big-endian signed int16 deltas, tenths of a degree) | ✅ verified — 8 tests |
 | `encodeGimbalPacket.test.ts` | file | Length, round-trip via independent `DataView` decode (positive/negative/mixed), NaN/Infinity → 0, extreme-value clamping, purity | ✅ verified |
-| `useBleConnection.ts` | file | Owns a `BleManager`, scans for the Nordic UART service, connects to the first match, discovers characteristics, exposes `state` (a discriminated union including `'connection-lost'` vs `'error'`) and a fire-and-forget `send(correction)` | ⚠️ needs verification — `tsc --noEmit` passes, written directly against `node_modules/react-native-ble-plx/src/index.d.ts`, but **has never connected to a real micro:bit**. No unit test exists for this file — a hook that's 95% native-BLE side effects isn't meaningfully unit-testable the way the two pure files above are; its correctness claim rests entirely on matching the real library's types, not on a test suite. |
+| `useBleConnection.ts` | file | Owns a `BleManager`, scans for the Nordic UART service, connects to the first match, discovers characteristics, exposes `state` (a discriminated union including `'connection-lost'` vs `'error'`) and a fire-and-forget `send(correction)`. Auto-reconnects (flat 3s retry) after any unexpected drop — added 2026-08-14, since a BLE link dropping briefly during normal filming (gimbal movement, someone stepping out of range) is an expected transient, not a fatal error. | ⚠️ needs verification — `tsc --noEmit` passes, written directly against `node_modules/react-native-ble-plx/src/index.d.ts`, but **has never connected to a real micro:bit** — the reconnect logic in particular has no way to be exercised without a real drop to recover from. No unit test exists for this file — a hook that's ~95% native-BLE side effects isn't meaningfully unit-testable the way the two pure files above are; its correctness claim rests entirely on matching the real library's types, not on a test suite. |
 
 ## Design decisions worth knowing
 
@@ -44,6 +44,9 @@ the actual micro:bit, which hasn't happened. Every status below is "implemented,
   `onDeviceDisconnected`'s `error` argument — `null` means this app called
   `cancelDeviceConnection` itself (e.g. unmount teardown), non-null means the link actually
   dropped (out of range, micro:bit brownout — see `research/hardware/power-brownout-risk.md`).
+- **`'connection-lost'` auto-retries, it isn't terminal.** A flat 3-second rescan loop starts
+  automatically on any unexpected drop and keeps trying until it reconnects or the component
+  unmounts — a transient drop during normal filming shouldn't require relaunching the app.
 
 ## Depends on
 `react`, `react-native-ble-plx` (`BleManager`, `State`, `BleError`/`Device`/`Subscription`

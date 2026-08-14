@@ -283,9 +283,14 @@ disagrees.)*
 - ELEGOO UNO R3 Most Complete Starter Kit (spare/backup, not in primary design).
 - iPhone 16 (non-Pro) — the camera + CV + control app device.
 
-**Needed:**
-- Dedicated battery/power bank for robot electronics (separate from phone). **Status unconfirmed
-  as of 2026-08-14** — the user confirmed "micro:bit + PCA9685 + gimbal wired" but did not
-  explicitly confirm a power source; do not assume this is resolved. Confirm before the first
-  powered servo test (`.claude/skills/servo-bounds-test/`) — see
-  `docs/ROBOT_INTEGRATION_PLAN.md`'s prerequisites checklist.
+**Needed:** (none currently — see below)
+
+**Resolved same day, 2026-08-14:** the power-bank gap flagged earlier today is closed — the user
+has a Bextoo 27,000mAh USB power bank (22.5W fast charge, USB-A/USB-C output). Electrically
+adequate on paper for Phase 1 (2 gimbal servos only, standard 5V USB output is in-spec for hobby
+servos) — see `research/hardware/pca9685-servo-control.md`'s "This project's actual power
+source" section for the wiring approach (needs a USB breakout/cut-cable to reach the PCA9685's
+screw terminals) and the one real unknown (some power banks auto-shutoff under a servo's spiky
+low-current draw pattern — untested, and exactly what `servo-bounds-test`'s existing brownout
+procedure will reveal if it's a problem). **Not reassessed for Phase 2** (drive motors) — a phone
+power bank is a much shakier bet for motor stall current; revisit when that phase starts.
