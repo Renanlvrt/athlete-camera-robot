@@ -13,6 +13,7 @@ This folder contains no code.
 | `YOUR_STEPS.md` | file | **Start here if you're the human.** Copy-paste commands for GitHub setup, AltStore install, and the morning hardware session | ⚠️ needs verification (steps never executed) |
 | `NIGHT_LOOP_BRIEF.md` | file | Complete brief handed to a second Claude instance for an unattended overnight run (2026-08-09) | ✅ verified |
 | `DAY_AGENT_DONE.md` | file | Sentinel — its existence tells the night agent the repo is safe to edit | ✅ verified |
+| `ROBOT_INTEGRATION_PLAN.md` | file | Step-by-step plan for closing the loop onto the real robot: `ble-ping` → `servo-bounds-test` → `gimbal-control-firmware` → full field test, with a prerequisites checklist and explicit non-goals | ⚠️ needs verification — the plan itself hasn't been executed yet |
 
 Files the night agent is expected to create: `NIGHT_LOOP_PLAN.md`, `NIGHT_DECISIONS.md`,
 `NIGHT_REPORT.md`, and `testing/MORNING_TEST_PLAN.md`.

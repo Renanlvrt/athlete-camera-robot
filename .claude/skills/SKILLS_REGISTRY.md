@@ -10,8 +10,9 @@ and for quick agent orientation; Claude Code's actual auto-discovery reads each 
 | build-unsigned-ipa | `.claude/skills/build-unsigned-ipa/` | Trigger the GitHub Actions macOS build for the unsigned `.ipa` and confirm the artifact downloads. | ✅ verified — scripts run for real against a workflow that's gone green 4/4 attempts; see `docs/VERIFICATION_REPORT.md` |
 | webcam-detection-preview | `.claude/skills/webcam-detection-preview/` | Run the bundled TFLite model against the laptop webcam (or a static image) for fast, no-phone iteration on detection/overlay code. | ✅ verified — run against the real model and real webcam frames, 2026-08-13 |
 | ble-ping | `.claude/skills/ble-ping/` | Connect to the micro:bit over BLE and echo a test payload — bench (laptop) first, then phone. | ⚠️ needs verification — scripts written, never run against hardware |
-| servo-bounds-test | `.claude/skills/servo-bounds-test/` | Sweep the gimbal servos to find real mechanical limits; stress-test for BLE brownout. | ⚠️ needs verification — script written, never flashed; PCA9685 not yet purchased |
+| servo-bounds-test | `.claude/skills/servo-bounds-test/` | Sweep the gimbal servos to find real mechanical limits; stress-test for BLE brownout. | ⚠️ needs verification — script written, never flashed. PCA9685 is now owned/wired (confirmed 2026-08-14, `docs/PRD.md` §8) — no longer blocked on hardware, just on running it |
 | cv-framerate-test | `.claude/skills/cv-framerate-test/` | Measure per-frame processing time on the iPhone 16 — empty processor first, then with the model. | ⚠️ needs verification — screen written, but blocked: requires worklets packages that are not installed |
+| gimbal-control-firmware | `.claude/skills/gimbal-control-firmware/` | Flash the production micro:bit program that receives BLE gimbal packets and drives the PCA9685 servos — the last step before a real field test. | ⚠️ needs verification — new 2026-08-14, never flashed; ships with a placeholder safe range pending servo-bounds-test's real measurement |
 
 Status tags match `CLAUDE.md` Section 1.2 (`✅ verified`, `⚠️ needs verification`,
 `❌ deprecated`, `🔜 planned`).
@@ -22,7 +23,7 @@ These are not independent — each is a gate for the next:
 
 ```
 build-unsigned-ipa ──► (app on phone) ──► cv-framerate-test ──► tracking work
-                                    └──► ble-ping ──► servo-bounds-test ──► closed loop
+                                    └──► ble-ping ──► servo-bounds-test ──► gimbal-control-firmware ──► field test
 ```
 
 `build-unsigned-ipa` is now proven end-to-end at the CI level (2026-08-09) — the remaining gap

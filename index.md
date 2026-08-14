@@ -7,30 +7,38 @@ Read `docs/PRD.md` for what is decided vs. future.
 
 Current milestone: **Milestone 1 / Stage 4 — live camera preview + on-device person detection +
 tracking overlay (box, distance, bearing, dashed center-line, centred indicator), front/back
-camera toggle, and basic video recording.** Code and unit tests are done and verified on Windows;
-on-device behavior of everything added since the first phone install is not (see below).
-Multi-athlete UX, base movement, and everything else in `docs/PRD.md` §5–§6 remain untouched.
+camera toggle, video recording (now saved to Photos), and a first pass at the BLE control loop
+to the robot (`src/ble/`, `src/hooks/useGimbalControl.ts`).** Code and unit tests are done and
+verified on Windows; on-device behavior of everything added since the first phone install is not
+(see below). Multi-athlete UX, base movement, and everything else in `docs/PRD.md` §5–§6 remain
+untouched.
 
-## ⚠️ One on-device report so far — box-too-big fixed, next round untested
+## ⚠️ Two on-device reports so far — both fixed same night, next round untested
 
-As of **2026-08-13**: `npm install`, `npm run typecheck`, and `npm test` (73/73) all succeed, the
-Expo config evaluates, and **the CI build pipeline has run green 6 times**
+As of **2026-08-14**: `npm install`, `npm run typecheck`, and `npm test` (103/103) all succeed,
+the Expo config evaluates, and the CI build pipeline has run green multiple times
 (`.github/workflows/index.md`, `docs/VERIFICATION_REPORT.md`) producing a real, inspected unsigned
-`.ipa`. The app **has** been installed on the iPhone and launched once — that report found the
-tracking box was oversized/mispositioned and the readout numbers weren't visible. The box-drawing
-bug (badge invisible under the panel) is fixed and laptop-confirmed; **the box-size/position root
-cause is not actually confirmed** — the developer's own hypothesis (front camera) turned out to
-not match the code that was running (only the back camera was ever requested), so front-camera
-mirroring is now handled correctly regardless, but the real explanation is still most likely the
-open frame-coordinate-rotation gap (`src/hooks/useAthleteDetection.ts`). A further round also
-added a front/back toggle, a dashed center-line + vector readout, and basic video recording — all
-implemented and laptop-tested as far as possible (`.claude/skills/webcam-detection-preview/`), but
-**none of this second round has been installed on the phone yet.** No BLE link has been made and
-no servo has moved. `testing/REAL_HARDWARE_TEST_LOG.md` still has zero entries — only a human
-running `testing/MORNING_TEST_PLAN.md` can change that (`CLAUDE.md` §5.2).
+`.ipa`. Two real phone tests have happened:
+
+- **Phone Test #1** found the tracking box oversized/mispositioned and the readout numbers not
+  visible. The badge z-order bug was fixed and laptop-confirmed.
+- **Phone Test #2** (front/back toggle, dashed line, recording) found: front camera worked
+  correctly, but the **back camera's box was wrong on both axes at once** (not just mirrored) —
+  root-caused to a missing box-rotation step for `Frame.orientation`, now fixed in
+  `src/tracking/decodeDetections.ts`'s `orientBox`. Recording itself worked but nothing reached
+  the Photos app — expected, since that build only ever wrote to a temp file; `expo-media-library`
+  is now wired in to actually save it.
+
+Neither fix has been installed/tested on the phone yet — that's the next round. Separately,
+tonight also added the full BLE transport (`src/ble/`) and control loop
+(`src/hooks/useGimbalControl.ts`), plus the micro:bit-side production firmware
+(`.claude/skills/gimbal-control-firmware/`) — **none of the BLE/robot side has touched real
+hardware.** See `docs/ROBOT_INTEGRATION_PLAN.md` for the exact sequenced path to a real robot
+test. `testing/REAL_HARDWARE_TEST_LOG.md` still has zero fully-human-run entries — only a human
+running the plan there can change that (`CLAUDE.md` §5.2).
 
 Treat every `⚠️` tag below as literal. See `docs/VERIFICATION_REPORT.md` for exactly what was and
-wasn't checked, and `testing/MORNING_TEST_PLAN.md` for the ordered path to a real hardware test.
+wasn't checked, and `docs/ROBOT_INTEGRATION_PLAN.md` for the ordered path to a real hardware test.
 
 ## Contents
 
@@ -43,9 +51,9 @@ wasn't checked, and `testing/MORNING_TEST_PLAN.md` for the ordered path to a rea
 | `testing/` | folder | Human-reported results from real hardware — see `testing/index.md` | ⚠️ structure only — **zero results recorded** |
 | `design/` | folder | UI mockups for direction-setting — see `design/index.md` | ✅ verified |
 | `assets/` | folder | Bundled static files (the TFLite model) — see `assets/index.md` | ⚠️ needs verification — model sourced/confirmed, inference untested on device |
-| `src/` | folder | All application source loaded by `index.ts` — see `src/index.md` | ⚠️ mixed — `src/tracking/` + `src/screens/frameLayout.ts` are ✅ unit-tested (73 tests total); on-device rendering (including front/back switching and recording) is unconfirmed |
-| `.claude/` | folder | Skills (`skills/`) and subagents (`agents/`) — see each folder's `index.md` | ⚠️ needs verification — `build-unsigned-ipa` and `webcam-detection-preview` are ✅ verified (both runnable/run from this machine), the other 3 hardware skills are unrun |
-| `.github/` | folder | CI workflow for the unsigned iOS build — see `.github/index.md` | ✅ verified — ran green 6 times, most recently 2026-08-13 |
+| `src/` | folder | All application source loaded by `index.ts` — see `src/index.md` | ⚠️ mixed — `src/tracking/`, `src/ble/`'s pure files, and `src/screens/frameLayout.ts` are ✅ unit-tested (103 tests total); on-device rendering and the BLE connection hook are unconfirmed |
+| `.claude/` | folder | Skills (`skills/`) and subagents (`agents/`) — see each folder's `index.md` | ⚠️ needs verification — `build-unsigned-ipa` and `webcam-detection-preview` are ✅ verified (both runnable/run from this machine), the other 4 hardware skills (including new `gimbal-control-firmware`) are unrun |
+| `.github/` | folder | CI workflow for the unsigned iOS build — see `.github/index.md` | ✅ verified — see `.github/workflows/index.md` for the exact run count/history |
 | `index.ts` | file | Expo entry point; registers `src/App.tsx` as the root component | ✅ verified |
 | `app.json` | file | Expo config: bundle IDs, camera permissions, fast-tflite/ble-plx plugins | ⚠️ needs verification — evaluates cleanly and CI's `expo prebuild` succeeds, but effect on-device (permission prompts, plugin behavior) unconfirmed |
 | `metro.config.js` | file | Adds `.tflite` to Metro's asset extensions so models bundle | ⚠️ needs verification (never bundled on device) |
