@@ -775,3 +775,28 @@ as possible but **not yet confirmed on the device.** The entire BLE/robot side (
 control loop, firmware) is new tonight and has had **zero contact with real hardware** — treat
 every claim about it as a design/implementation claim, not a working-system claim, until
 `docs/ROBOT_INTEGRATION_PLAN.md` has actually been run.
+
+## 2026-08-14 (later) — BLE auto-reconnect, PCA9685/power wiring research, CI run 31847260683
+
+Added auto-reconnect to `src/ble/useBleConnection.ts`: an unexpected connection drop now
+schedules a rescan every 3s instead of staying dead until the app is relaunched — real BLE links
+are expected to drop transiently during filming, so `'connection-lost'` needed to be recoverable,
+not terminal. `npm run typecheck` → zero errors, `npm test` → 103/103 unchanged (this hook has no
+unit tests, same as before — see `src/ble/index.md` for why).
+
+Documented the user's real hardware in `research/hardware/pca9685-servo-control.md`: PCA9685
+channel assignment cross-checked against the firmware's `CHANNEL_ROLL`/`CHANNEL_PITCH` constants,
+and exact wiring guidance for powering it from a standard USB power bank (Bextoo 27,000mAh) —
+needs a USB breakout/cut-cable to reach the screw terminals, 5V is in-spec for hobby servos,
+current adequacy for Phase 1 is plausible but explicitly deferred to `servo-bounds-test` (not
+resolvable by research, per `power-brownout-risk.md`'s own standing rule). `docs/PRD.md` §8
+updated to reflect the power source is identified.
+
+CI run `31847260683`: success in 8m51s, artifact downloaded and inspected (valid zip,
+`Payload/*.app`, parseable `Info.plist`). No native surface changed (pure JS control-flow change),
+so this is a low-risk confirmation, not a new area of build risk.
+
+**Still zero real BLE hardware contact** — none of this has been observed working on the actual
+micro:bit. The user separately reported connecting the micro:bit to their laptop via USB (for
+flashing) with no motors connected (safety-correct posture) — that's the human's own action,
+logged here for context, not something this agent ran or verified (`CLAUDE.md` §5.2).

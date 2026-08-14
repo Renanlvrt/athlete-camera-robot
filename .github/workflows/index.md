@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 8 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 9 times |
 
-## Status: ✅ verified green, 8/8 runs, most recently 2026-08-14 (night — camera fixes + BLE/control loop)
+## Status: ✅ verified green, 9/9 runs, most recently 2026-08-14 (night — BLE auto-reconnect)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -47,9 +47,13 @@ box's own x/y), now fixed and included in run `31762839976` above. Recording its
 nothing reached the Photos app, as expected for that build (temp-file-only) — also fixed in the
 same run.
 
-All eight produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
+- Run `31847260683` (commit `7ea1252` — BLE auto-reconnect on unexpected drop, PCA9685/power-bank
+  wiring research): success in 8m51s, auto-triggered by the push. Same 14.3 MB, no native surface
+  change — this is a pure JS-side control-flow change to `useBleConnection.ts`.
+
+All nine produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
 zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
-`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all eight
+`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all nine
 runs** — none of the "likely first failures" predicted below have occurred yet. Full detail in
 `docs/VERIFICATION_REPORT.md`.
 
