@@ -35,6 +35,15 @@ Usage:
       Open a live window with the overlay running in real time — for the
       developer to eyeball themselves. Press 'q' to quit.
 
+  python detect_preview.py --live --send-ble
+      Same, but ALSO connects to the robot's micro:bit over BLE and sends
+      real gimbal-correction packets computed from what the webcam sees —
+      a full CV -> correction -> BLE -> firmware sandbox on the laptop, no
+      phone/AltStore round trip needed. Point the webcam at yourself and
+      watch the micro:bit's LED matrix (gimbal-led-simulator firmware)
+      react in real time. Added 2026-08-15 specifically so BLE/pipeline
+      issues can be narrowed down without a slow phone reinstall each time.
+
   python detect_preview.py --session near --duration 15 --output-dir sessions
       Run for 15 seconds, saving one annotated snapshot per second plus a
       per-frame CSV log (confidence, offset, bearing, centred) under
@@ -43,9 +52,13 @@ Usage:
 """
 
 import argparse
+import asyncio
 import csv
 import math
+import queue
+import struct
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -128,6 +141,131 @@ def compute_tracking_readout(athlete, buffer=CENTER_BUFFER):
         "angle_degrees": angle_degrees,
         "is_centered": distance <= buffer,
     }
+
+
+# --- src/tracking/computeGimbalCorrection.ts port ----------------------------
+# --- src/ble/encodeGimbalPacket.ts port ---------------------------------------
+# KEEP IN SYNC WITH those two files, same rule as everything else above.
+
+GIMBAL_GAIN = 30
+GIMBAL_DEADBAND = 0.05
+GIMBAL_MAX_STEP = 5
+
+
+def _correct_axis(offset, gain=GIMBAL_GAIN, deadband=GIMBAL_DEADBAND, max_step=GIMBAL_MAX_STEP):
+    """Deadband first (tiny jitter -> exactly zero), then gain, then a step clamp — same order as computeGimbalCorrection.ts."""
+    if abs(offset) < deadband:
+        return 0.0
+    return max(-max_step, min(max_step, offset * gain))
+
+
+def compute_gimbal_correction(athlete):
+    """Deltas, not absolute angles — see computeGimbalCorrection.ts's own doc comment.
+    Sign convention: athlete right of centre -> positive roll_delta (pan toward them);
+    athlete ABOVE centre -> positive pitch_delta (tilt up) — note screen y grows
+    downward while pitch grows upward, hence the inversion below."""
+    centre_x = athlete["x"] + athlete["width"] / 2
+    centre_y = athlete["y"] + athlete["height"] / 2
+    offset_x = centre_x - FRAME_CENTRE
+    offset_y = FRAME_CENTRE - centre_y
+    return {"roll_delta": _correct_axis(offset_x), "pitch_delta": _correct_axis(offset_y)}
+
+
+def encode_gimbal_packet(roll_delta, pitch_delta):
+    """[roll_hi, roll_lo, pitch_hi, pitch_lo] — two big-endian signed int16, tenths of a
+    degree. Matches encodeGimbalPacket.ts exactly: NaN/Infinity -> 0, round, clamp to
+    what an int16 can hold."""
+
+    def to_clamped_tenths(degrees):
+        if not math.isfinite(degrees):
+            return 0
+        tenths = round(degrees * 10)
+        return max(-32768, min(32767, tenths))
+
+    return struct.pack(">hh", to_clamped_tenths(roll_delta), to_clamped_tenths(pitch_delta))
+
+
+# --- BLE sending (background thread — see src/ble/useBleConnection.ts for the ---
+# --- React Native equivalent this mirrors) ------------------------------------
+#
+# Runs its own asyncio loop on a daemon thread so the main webcam loop (cv2's
+# blocking VideoCapture.read()) never has to become async. `send()` is called
+# from the main thread; it drops any stale queued packet in favour of the
+# newest one, matching useGimbalControl.ts's "always send the current state,
+# never a backlog" behaviour.
+#
+# Scan/connect logic mirrors src/ble/useBleConnection.ts exactly (broad scan,
+# match by service UUID OR advertised name starting with "BBC micro:bit") —
+# confirmed working from this exact match logic in a standalone diagnostic,
+# 2026-08-15 (found in 0.25s, connected in 1.88s, wrote successfully). If this
+# script also fails to connect, the problem is upstream of react-native-ble-plx
+# entirely (the robot or the radio environment); if only the phone fails, the
+# problem is specific to the RN/iOS code path.
+UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+UART_RX_CHAR = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # write here — see research/hardware/microbit-ble-link.md
+
+
+class BleSender:
+    def __init__(self):
+        self._queue: "queue.Queue[bytes]" = queue.Queue()
+        self._stop = threading.Event()
+        self.connected = threading.Event()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def send(self, roll_delta, pitch_delta):
+        packet = encode_gimbal_packet(roll_delta, pitch_delta)
+        try:
+            while True:
+                self._queue.get_nowait()
+        except queue.Empty:
+            pass
+        self._queue.put_nowait(packet)
+
+    def stop(self):
+        self._stop.set()
+        self._thread.join(timeout=5)
+
+    def _run_loop(self):
+        asyncio.run(self._main())
+
+    async def _main(self):
+        from bleak import BleakClient, BleakScanner
+
+        def matches(device, adv):
+            uuids = [u.lower() for u in (adv.service_uuids or [])]
+            has_service = UART_SERVICE.lower() in uuids
+            name = device.name or adv.local_name or ""
+            has_name = name.startswith("BBC micro:bit")
+            return has_service or has_name
+
+        print("[ble] scanning for the robot's micro:bit (15s)...")
+        device = await BleakScanner.find_device_by_filter(matches, timeout=15.0)
+        if device is None:
+            print("[ble] NOT FOUND — is it powered and showing 'B'? BLE sending disabled for this run.")
+            return
+
+        print(f"[ble] found {device.name} [{device.address}], connecting...")
+        try:
+            async with BleakClient(device) as client:
+                print("[ble] connected — sending live gimbal corrections")
+                self.connected.set()
+                while not self._stop.is_set():
+                    try:
+                        packet = self._queue.get(timeout=0.1)
+                    except queue.Empty:
+                        continue
+                    try:
+                        await client.write_gatt_char(UART_RX_CHAR, packet, response=False)
+                    except Exception as exc:  # noqa: BLE001 — report and keep the loop alive
+                        print(f"[ble] write failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 — report and exit the BLE thread cleanly
+            print(f"[ble] connection failed: {exc}")
+        finally:
+            self.connected.clear()
+            print("[ble] disconnected")
 
 
 COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -396,6 +534,14 @@ def main():
         "unflipped frame — exercises the same isMirrored path as useAthleteDetection.ts "
         "without needing the phone's actual front camera.",
     )
+    parser.add_argument(
+        "--send-ble",
+        action="store_true",
+        help="Only with --live. Connect to the robot's micro:bit over BLE and send real "
+        "gimbal-correction packets computed from what the webcam sees, at ~15Hz — a full "
+        "laptop-only sandbox for the CV -> correction -> BLE -> firmware pipeline. "
+        "Requires `pip install bleak` (see .claude/skills/ble-ping/).",
+    )
     args = parser.parse_args()
 
     interpreter = load_interpreter()
@@ -441,17 +587,48 @@ def main():
             return 0
 
         if args.live:
+            ble_sender = None
+            last_sent_at = 0.0
+            SEND_INTERVAL_S = 1.0 / 15.0  # matches useGimbalControl.ts's ~15Hz
+
+            if args.send_ble:
+                ble_sender = BleSender()
+                ble_sender.start()
+
             print("Live preview running. Press 'q' in the window to quit.")
-            while True:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                _, athlete, readout = run_detection(interpreter, frame, is_mirrored=args.mirror)
-                annotated = draw_overlay(frame, athlete, readout)
-                cv2.imshow("webcam-detection-preview", annotated)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-            cv2.destroyAllWindows()
+            try:
+                while True:
+                    ok, frame = cap.read()
+                    if not ok:
+                        break
+                    _, athlete, readout = run_detection(interpreter, frame, is_mirrored=args.mirror)
+                    annotated = draw_overlay(frame, athlete, readout)
+
+                    if ble_sender is not None:
+                        ble_connected = ble_sender.connected.is_set()
+                        ble_label = "BLE: CONNECTED" if ble_connected else "BLE: CONNECTING..."
+                        cv2.putText(
+                            annotated, ble_label, (16, annotated.shape[0] - 16),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (89, 199, 52) if ble_connected else (0, 204, 255), 2,
+                        )
+                        # Same rule as useGimbalControl.ts: only send when there's a
+                        # locked athlete, rate-limited — no athlete means no packet
+                        # at all, letting the firmware's own watchdog show its
+                        # "no athlete" state rather than this script deciding that.
+                        now = time.monotonic()
+                        if athlete is not None and ble_connected and now - last_sent_at >= SEND_INTERVAL_S:
+                            correction = compute_gimbal_correction(athlete)
+                            ble_sender.send(correction["roll_delta"], correction["pitch_delta"])
+                            last_sent_at = now
+
+                    cv2.imshow("webcam-detection-preview", annotated)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
+            finally:
+                cv2.destroyAllWindows()
+                if ble_sender is not None:
+                    ble_sender.stop()
             return 0
 
         # Single-shot capture. Read a few frames first — the first frame or two

@@ -24,6 +24,45 @@ file exists to prevent.
 
 ---
 
+## 2026-08-15 (later) — App-side "BLE error" report, then Windows-side isolation — ⚠️ AGENT-RUN, see provenance note
+
+**⚠️ PROVENANCE — same exception as the entry below, at the user's explicit, repeated,
+in-session request.** Not an independent human-observed report for the diagnostic steps; the
+initial failure report (the phone showing "BLE error") IS a genuine human report and is recorded
+as such.
+
+- **Ran:** the phone app (build `31898819543`, then the retry-fix build `31901198781`), then a
+  series of Windows-side diagnostics to isolate the cause: `bench_ping.py` (against the
+  micro:bit's *current* firmware — `gimbal-led-simulator`, which doesn't echo, so its 0/5 result
+  is expected, not a failure signal), a scan→connect→discover→write sequence mirroring
+  `useBleConnection.ts` exactly, and finally `.claude/skills/webcam-detection-preview/scripts/detect_preview.py --live --send-ble`
+  (the new full-pipeline sandbox, built specifically in response to this report).
+- **Hardware present:** micro:bit (V2, `gimbal-led-simulator` firmware), Windows laptop, iPhone
+  16 with the app installed. No PCA9685/servos/battery involved.
+- **Result:** ⚠️ partly — **human-reported**: the app showed a generic "BLE: ERROR" on launch,
+  and tapping the (then-new) retry button did not resolve it. **Agent-run on Windows**: the exact
+  same scan/connect/discover/write sequence the app performs succeeded cleanly (found in 0.25s,
+  connected in 1.88s, 7 services discovered instantly, write succeeded) — both as a standalone
+  diagnostic and integrated into the new `--live --send-ble` sandbox mode (webcam opened, model
+  ran, BLE scanned, found, connected, and began sending live corrections).
+- **Numbers:** Windows diagnostic: scan 0.25s, connect 1.88s, discover ~0s, write ~0.01s, total
+  2.25s. Phone: no numbers — the error state gave no timing/detail at the time (this is what the
+  retry-fix build addresses for the next report).
+- **Surprises:** None expected — this is the finding, not a surprise: the robot, the firmware,
+  and the wire protocol all check out cleanly from an independent BLE stack (Windows/`bleak`) on
+  the same hardware the phone is failing against. This strongly narrows the search to
+  `react-native-ble-plx`'s iOS-specific behaviour rather than anything robot-side, but does NOT
+  prove it — a Windows success and a phone failure are consistent with several different root
+  causes, this just rules out the robot/protocol as the most likely one.
+- **Follow-up:** Built `.claude/skills/webcam-detection-preview --live --send-ble` specifically
+  so future BLE iteration doesn't require a phone round-trip to get *some* signal. The actual
+  phone-side root cause is still open — the retry-fix build (`31901198781`) needs to be
+  reinstalled and the real error text (now shown under the badge) reported back before this can
+  be closed out. Do not mark `src/ble/useBleConnection.ts` `✅` — see its own `index.md` entry,
+  already flagged as "first real run failed."
+
+---
+
 ## 2026-08-15 — BLE bench test: 20/20 pings, real GATT dump — ⚠️ AGENT-RUN, see provenance note
 
 **⚠️ PROVENANCE — read this before treating this entry like the others in this file.** This
