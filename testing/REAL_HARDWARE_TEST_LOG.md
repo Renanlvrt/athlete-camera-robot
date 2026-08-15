@@ -24,6 +24,55 @@ file exists to prevent.
 
 ---
 
+## 2026-08-16 — Power bank auto-shutoff on the micro:bit alone (human-reported)
+
+- **Ran:** Nothing formal — the user's normal bench setup (micro:bit + power bank) while
+  continuing other testing.
+- **Hardware present:** micro:bit (V2), Bextoo USB power bank, no PCA9685/servos in this
+  observation.
+- **Result:** ❌ failed — power delivery stopped after a few seconds.
+- **What happened:** User reported: "when I connect my micro-bit to powerbank... I have a thing
+  that stops delivering current to the power bank after a few seconds." Confirmed via research
+  (not hardware measurement) to be the power bank's standard low-current auto-shutoff — see
+  `research/hardware/power-bank-auto-shutoff.md`.
+- **Numbers:** Not measured (no multimeter used) — "a few seconds" per the user's own words.
+- **Surprises:** A candidate fix (drawing more current via the LED matrix) was considered and
+  discarded before ever being tried, once the official micro:bit current-budget numbers (~30mA
+  ceiling, even fully lit) showed it wouldn't cross the typical ~50-100mA shutoff threshold.
+- **Follow-up:** Not yet fixed. Plan (Arduino-as-power-relay, zero-cost) deferred to 2026-08-17 —
+  see `docs/VERIFICATION_REPORT.md`'s matching entry and the scheduled reminder
+  `trig_01QxHH6TVcvbZoXSEg7JRKdq`. Not blocking current CV/BLE work.
+
+## 2026-08-15 (later) — BLE reconnect bug: "connected" but not working — human-reported, fix built same session
+
+- **Ran:** The phone app (build `31901198781`, the retry-fix build), tapping the BLE badge to
+  retry after a disconnect.
+- **Hardware present:** micro:bit (V2, `gimbal-led-simulator` firmware), iPhone 16.
+- **Result:** ❌ failed, then fixed (untested since) — user reported: "when I disconnect and
+  reconnect, then it broke and did not do anything but the X cross... it was saying connected
+  when clearly not."
+- **What happened:** Root-caused in code (not observed directly) to a race between `retry()`'s
+  fire-and-forget device teardown and the next connection attempt — see
+  `docs/VERIFICATION_REPORT.md`'s matching entry for the full technical explanation. Fixed in
+  `src/ble/useBleConnection.ts`, shipped in CI run `31913485020`.
+- **Numbers:** None reported.
+- **Surprises:** The exact same class of bug (inferring "still connected" instead of checking
+  real connection state) was independently present in the Python sandbox's `BleSender` too —
+  fixed there in the same pass.
+- **Follow-up:** CI run `31913485020` has this fix; needs a fresh phone install + a real
+  disconnect/reconnect test to confirm. Do not mark `src/ble/useBleConnection.ts` `✅` until that
+  happens.
+
+## 2026-08-15 (later) — Windows sandbox confirmed connecting via real BLE radio, not USB — ⚠️ AGENT-RUN, see provenance note
+
+Same provenance exception as the entries below (user's explicit in-session request). User asked
+to confirm the sandbox's BLE connection was genuinely wireless, not somehow riding the USB power
+cable. Verified: the `MICROBIT` USB drive remained mounted (cable present, powering the board)
+while, independently, `Windows.Devices.Bluetooth.Advertisement` (a native Bluetooth-radio-only
+API with no USB/serial code path) received 72 separate over-the-air advertisement packets from
+the micro:bit's own Bluetooth address over a 10-second window. Two independent facts confirmed
+simultaneously true — the cable powers the board, the radio carries the data.
+
 ## 2026-08-15 (later) — App-side "BLE error" report, then Windows-side isolation — ⚠️ AGENT-RUN, see provenance note
 
 **⚠️ PROVENANCE — same exception as the entry below, at the user's explicit, repeated,

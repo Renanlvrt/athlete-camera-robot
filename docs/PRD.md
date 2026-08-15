@@ -288,14 +288,22 @@ disagrees.)*
 - ELEGOO UNO R3 Most Complete Starter Kit (spare/backup, not in primary design).
 - iPhone 16 (non-Pro) — the camera + CV + control app device.
 
-**Needed:** (none currently — see below)
+**Needed:**
+- **micro:bit battery holder, 2×AAA (JST-PH connector), ~$3-5** — the fix for a real, confirmed
+  problem (2026-08-16): the USB power bank cuts power to the micro:bit after a few seconds
+  because a bare micro:bit's ~30mA idle draw trips the power bank's low-current auto-shutoff.
+  The micro:bit's native JST-PH battery connector has no such shutoff logic — see
+  `research/hardware/power-bank-auto-shutoff.md` for the confirmed root cause (verified against
+  official micro:bit hardware docs) and why this is the clean fix rather than a workaround.
 
-**Resolved same day, 2026-08-14:** the power-bank gap flagged earlier today is closed — the user
-has a Bextoo 27,000mAh USB power bank (22.5W fast charge, USB-A/USB-C output). Electrically
-adequate on paper for Phase 1 (2 gimbal servos only, standard 5V USB output is in-spec for hobby
-servos) — see `research/hardware/pca9685-servo-control.md`'s "This project's actual power
-source" section for the wiring approach (needs a USB breakout/cut-cable to reach the PCA9685's
-screw terminals) and the one real unknown (some power banks auto-shutoff under a servo's spiky
-low-current draw pattern — untested, and exactly what `servo-bounds-test`'s existing brownout
-procedure will reveal if it's a problem). **Not reassessed for Phase 2** (drive motors) — a phone
+**Resolved 2026-08-14, revised 2026-08-16:** the power-bank gap flagged on 2026-08-14 is
+partially closed — the user's Bextoo 27,000mAh USB power bank is electrically adequate on paper
+for the PCA9685/servo rail specifically (Phase 1, 2 gimbal servos, standard 5V USB output is
+in-spec — see `research/hardware/pca9685-servo-control.md`'s "This project's actual power
+source" section for wiring). **But the SAME power bank has now confirmed to auto-shutoff when
+powering the micro:bit's own logic supply** — a real, observed failure, not the hypothetical
+"servo idle current" risk originally flagged here; the actual trigger was the micro:bit alone,
+before any servo was even involved. Whether the servo/PCA9685 rail hits the same issue during
+idle (no movement commanded) remains genuinely untested — exactly what `servo-bounds-test`'s
+existing brownout procedure will reveal. **Not reassessed for Phase 2** (drive motors) — a phone
 power bank is a much shakier bet for motor stall current; revisit when that phase starts.

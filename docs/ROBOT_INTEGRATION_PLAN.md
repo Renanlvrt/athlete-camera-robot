@@ -93,15 +93,17 @@ real BLE hardware:**
 
 | Piece | File | What it does |
 |---|---|---|
-| Prove the link | `.claude/skills/ble-ping/scripts/microbit_ble_echo.py` | Echoes a ping — no servos involved |
+| Prove the link | `.claude/skills/ble-ping/scripts/main.ts` (MakeCode — rewritten 2026-08-15) | Echoes a ping — no servos involved. **✅ Actually passed, real 20/20-ping bench test.** |
 | Find safe servo range | `.claude/skills/servo-bounds-test/scripts/microbit_servo_sweep.py` | Manual button-driven sweep, finds mechanical limits |
-| Actually drive the gimbal | `.claude/skills/gimbal-control-firmware/scripts/microbit_gimbal_control.py` | Receives the phone's packets, drives PCA9685 — **ships with a placeholder safe range**, see §3 |
+| Actually drive the gimbal | `.claude/skills/gimbal-control-firmware/scripts/main.ts` (MakeCode — rewritten 2026-08-15) | Receives the phone's packets, drives PCA9685 — **ships with a placeholder safe range**, see §3 |
+| Validate the pipeline with zero servo risk | `.claude/skills/gimbal-led-simulator/scripts/main.ts` | Same packets, LED matrix instead of servos — see §3.1.5 |
 
-**Hardware — per the user's direct confirmation tonight:** micro:bit, PCA9685, and both gimbal
-servos are physically wired. Power source identified — a Bextoo 27,000mAh USB power bank —
-electrically plausible for Phase 1 but genuinely untested; see §2 and
-`research/hardware/pca9685-servo-control.md`'s power section. Micro:bit revision (v1 vs v2) not
-yet confirmed — see §2's checklist for exactly how to check.
+**Hardware — per the user's direct confirmation:** micro:bit, PCA9685, and both gimbal servos
+are physically wired. Micro:bit revision confirmed V2 — see §2's checklist. **Power: the USB
+power bank has a confirmed problem (2026-08-16) powering the micro:bit's own logic supply — see
+`research/hardware/power-bank-auto-shutoff.md` and §2's updated checklist item below.** Whether
+the same issue affects the PCA9685/servo rail is still untested — see
+`research/hardware/pca9685-servo-control.md`'s power section.
 
 ## 2. Prerequisites checklist — confirm before starting §3
 
@@ -109,12 +111,20 @@ yet confirmed — see §2's checklist for exactly how to check.
       motors should stay unpowered through this entire plan.
 - [ ] **Phone removed from the gimbal mount** for every step except the very last (§3.4). You
       are deliberately driving servos toward untested limits; don't risk the phone.
+- [ ] **Micro:bit powered via its native JST-PH battery connector (2×AAA holder), NOT the USB
+      power bank.** Confirmed 2026-08-16: the USB power bank auto-shuts-off after a few seconds
+      powering the bare micro:bit (its ~30mA idle draw trips the bank's low-current cutoff) — see
+      `research/hardware/power-bank-auto-shutoff.md`. The JST-PH connector has no such shutoff
+      logic. Cheap holder (~$3-5), no soldering — the actual fix, not a workaround.
 - [ ] **Power bank connected to the PCA9685's V+/GND screw terminals via a USB breakout or cut
       cable** (not a direct USB plug — the PCA9685 has no USB port). See
       `research/hardware/pca9685-servo-control.md`'s "This project's actual power source"
       section for the exact wiring and why 5V is fine voltage-wise for the servos. Confirm common
       ground with the moto:bit (already satisfied if the Qwiic cable is intact — it carries its
-      own ground wire).
+      own ground wire). **Watch for the same auto-shutoff symptom here** while servos are idle
+      (not being commanded) — untested; if it happens, same fix family applies, see
+      `research/hardware/power-bank-auto-shutoff.md`'s "if the same issue shows up on the servo
+      rail" section.
 - [ ] **Battery disconnect within reach** for the servo-related steps (§3.2, §3.3, §3.4). For a
       USB power bank this just means "unplug the USB cable" — confirm that's physically easy to
       do quickly, not buried under other wiring.

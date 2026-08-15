@@ -91,7 +91,15 @@ maximum current continuously, heat up, and strip its gears.
 tracking runs. That is exactly what the `servo-bounds-test` skill is for, and why it's a
 prerequisite for Phase 4 rather than a nice-to-have.
 
-### Power — read `power-brownout-risk.md`
+### Power — read `power-brownout-risk.md` and `power-bank-auto-shutoff.md`
+
+**Real report, 2026-08-16: this power bank stopped delivering current to the micro:bit's own
+logic supply after a few seconds.** Confirmed root cause and fix in
+`research/hardware/power-bank-auto-shutoff.md` — the power bank's low-current auto-shutoff, not
+a wiring or firmware problem. Fix for the micro:bit's own power: use its native JST-PH battery
+connector with a 2×AAA holder instead of USB. That fix does NOT automatically extend to the
+servo/PCA9685 rail below, which is a separate power path — see that file's "if the same issue
+shows up on the servo rail" section if it recurs there once servo power is actually tested.
 
 The PCA9685 has a **separate V+ terminal for servo power**, deliberately isolated from the logic
 supply. Servos must be fed from the dedicated battery there, **never** from the micro:bit's 3V

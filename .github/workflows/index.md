@@ -10,7 +10,7 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 |------|------|----------------------------|--------|
 | `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 12 times |
 
-## Status: ✅ verified green, 12/12 runs, most recently 2026-08-15 (BLE retry + error detail)
+## Status: ✅ verified green, 14/14 runs, most recently 2026-08-15/16 (BLE retry-race fix)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -56,17 +56,23 @@ same run.
   success. Confirms adding non-`.md` files anywhere in the repo (even `.claude/skills/`) still
   triggers this workflow, not just `src/` changes.
 - Run `31901198781` (commit `fda4d54` — BLE manual retry + real error-message display on
-  `BleStatusBadge`): success in 11m40s, auto-triggered. **This is the build to install next** —
-  installed on the phone once already (the previous build, `31898819543`) and reached a BLE
-  `'error'` state with no diagnostic detail and no recovery path; this run is the fix for both
-  gaps, not a fix for the underlying error itself (still unknown — see
-  `docs/VERIFICATION_REPORT.md`'s 2026-08-15 entry).
+  `BleStatusBadge`): success in 11m40s, auto-triggered. Installed on the phone; reached
+  `'connected'` after a retry, but a real report showed it stuck claiming `'connected'` after a
+  disconnect/reconnect cycle while nothing actually worked.
+- Run `31904696836` (commit `157c08b` — the `--live --send-ble` full-pipeline sandbox added to
+  `webcam-detection-preview`; no `src/` changes): success in 8m31s, auto-triggered.
+- Run `31913485020` ("first commit" — the actual fix for the stuck-`'connected'` report:
+  `useBleConnection.ts`'s `retry()` now awaits the old device's `cancelDeviceConnection` before
+  starting a new connection attempt, closing the race that caused it; the same class of bug was
+  also fixed in the Python sandbox's `BleSender`, which now polls `client.is_connected` instead
+  of inferring connection state from write success/failure): success in 9m11s, auto-triggered.
+  **This is the build to install next.**
 
-All twelve produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
-zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
-`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all twelve
-runs** — none of the "likely first failures" predicted below have occurred yet. Full detail in
-`docs/VERIFICATION_REPORT.md`.
+All fourteen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
+valid zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable
+present, `Info.plist` is a parseable Apple binary property list. **First attempt succeeded on
+all fourteen runs** — none of the "likely first failures" predicted below have occurred yet.
+Full detail in `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical
 iPhone — that's `⚠️ needs verification`, human-only, tracked in

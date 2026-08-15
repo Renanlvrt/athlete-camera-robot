@@ -16,6 +16,7 @@ and documents the facts that code is built against and measures what research al
 | `ble-plx-app-side-implementation.md` | file | The exact `react-native-ble-plx` methods/lifecycle `src/ble/useBleConnection.ts` is built against, read directly from `node_modules`, plus the base64-encoding and permission-flow traps avoided at hardware time | ✅ verified (as research — every API claim confirmed against the real `.d.ts`; the connection lifecycle itself is still untested, no hardware BLE contact yet) |
 | `pca9685-servo-control.md` | file | I2C servo driving from micro:bit, the centiseconds footgun, channel assignment matching the firmware, and (2026-08-14) exact wiring guidance for the user's actual USB power bank | ⚠️ needs verification — board now owned/wired (`docs/PRD.md` §8), still not run |
 | `power-brownout-risk.md` | file | **Open question** — not resolvable by research, must be measured | ⚠️ open question |
+| `power-bank-auto-shutoff.md` | file | Why the micro:bit's USB power bank cuts out after a few seconds (real report, 2026-08-16) — confirmed root cause and fix via official micro:bit docs | ✅ verified — root cause and fix confirmed against official docs + community sources; fix not yet physically applied/reported |
 
 ## Depends on
 Nothing outside this folder.

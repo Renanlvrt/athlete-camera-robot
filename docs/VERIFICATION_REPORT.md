@@ -829,3 +829,66 @@ parseable `Info.plist`).
 it isn't, by design; this round only makes the *next* failure (if any) diagnosable instead of a
 dead end. The real root cause is still open until the next phone report comes back either
 `'connected'` or with a real error message to act on.
+
+## 2026-08-15/16 — Full BLE sandbox, a real reconnect bug found via it, and a fix for the actual retry race
+
+Using the retry-fix build (`31901198781`), the user reported the badge showed `'connected'`
+after a disconnect/reconnect cycle while nothing was actually working — a real, human-reported
+failure of the retry mechanism itself. Root-caused by re-reading `retry()`'s own logic: it bumped
+the effect's retry-generation counter to force a full teardown/restart, but a React cleanup
+function can't be awaited — the old device's `cancelDeviceConnection` was fired-and-forgotten,
+so a new `connectToDevice` for the same peripheral could start before the old connection had
+actually finished tearing down at the native level.
+
+**Fixed**: `retry()` now explicitly awaits `cancelDeviceConnection` on the previously-connected
+device before bumping the generation counter, guaranteeing the next connection attempt starts
+from a clean slate. The same underlying failure mode (claiming "connected" when it wasn't) was
+independently found and fixed in the Python sandbox's `BleSender` — it only inferred disconnects
+from write exceptions, so a silent drop between writes went unnoticed; now polls
+`client.is_connected` every loop iteration and auto-reconnects on a real drop.
+
+Also built, in the same session: `.claude/skills/webcam-detection-preview/scripts/detect_preview.py --live --send-ble`
+— ports `computeGimbalCorrection.ts`/`encodeGimbalPacket.ts` to Python (hand-verified against
+known inputs: centred → (0,0), an off-centre athlete → a correctly-clamped delta, encode/decode
+round-trip, NaN/Infinity → 0) and runs a real `bleak` BLE connection on a background thread,
+matching `useBleConnection.ts`'s exact scan/connect logic. Used this to isolate the earlier "BLE
+error" report: a standalone scan→connect→discover→write sequence mirroring the app succeeded
+cleanly from Windows (found in 0.25s, connected in 1.88s, wrote successfully), which is strong
+(not conclusive) evidence the robot/firmware/protocol are sound and the app's failures are
+specific to `react-native-ble-plx`'s iOS behaviour.
+
+Also independently verified, at the user's request: the BLE communication genuinely travels over
+the Bluetooth radio, not the USB cable used for power — confirmed by receiving 72 separate native
+Bluetooth LE radio advertisements from the micro:bit's own address over 10 seconds via
+`Windows.Devices.Bluetooth.Advertisement` (an API with no USB/serial code path at all), while the
+USB drive remained separately mounted the whole time.
+
+`npm run typecheck` → zero errors, `npm test` → 103/103 unchanged. CI run `31913485020`: success
+in 9m11s, artifact downloaded and inspected (valid zip, `Payload/*.app`, parseable `Info.plist`).
+
+**What this does NOT prove**: whether the retry-race fix actually resolves the reconnect problem
+on the real phone — untested there as of this entry. The sandbox's own reliability (proven on
+Windows/bleak) also says nothing about `react-native-ble-plx`'s iOS-specific behaviour, which
+remains the leading suspect for whatever the phone is still doing wrong.
+
+## 2026-08-16 — Real report: USB power bank auto-shuts-off powering the micro:bit alone
+
+Human-reported: the power bank stops delivering current to the micro:bit after a few seconds.
+Root-caused via research, not guessed: confirmed against the *official* micro:bit hardware docs
+(`tech.microbit.org/hardware/powersupply/`), which explicitly name this exact failure mode (power
+banks auto-shutoff below ~50-100mA draw; a bare micro:bit idles at ~30mA) and confirm the
+micro:bit's native JST-PH battery connector has no such shutoff logic. Full writeup in
+`research/hardware/power-bank-auto-shutoff.md`, including options for the servo/PCA9685 rail if
+the same issue recurs there (untested).
+
+A firmware-side fix (deliberately drawing more current via the LED matrix) was considered and
+retracted after checking real numbers: the micro:bit's own docs cap all on-board peripherals at
+~30mA even fully lit, which is below the shutoff threshold — and the LED simulator's own display
+activity already partially tests this without success, consistent with that number.
+
+No fix has been applied yet — the user wants to try a zero-cost, zero-cable-cutting option (using
+the owned ELEGOO Arduino Uno as a power relay) on 2026-08-17, once they can check for jumper
+wires and edge-connector access. A one-time scheduled reminder was created for that check
+(`trig_01QxHH6TVcvbZoXSEg7JRKdq`). Not a blocker for current CV/BLE work — the user is not
+connecting servos/motors yet, and a plain USB wall charger has no auto-shutoff issue at all for
+continued bench testing in the meantime.
