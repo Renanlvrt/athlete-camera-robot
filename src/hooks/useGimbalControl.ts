@@ -38,13 +38,15 @@ const SEND_INTERVAL_MS = 1000 / 15;
 export interface GimbalControlResult {
   /** The underlying BLE link state, so a screen can show it — see `src/screens/BleStatusBadge.tsx`. */
   readonly bleState: BleConnectionState;
+  /** Manually tear down and restart the BLE scan/connect cycle — see `useBleConnection.ts`'s own doc comment. */
+  readonly retryBle: () => void;
 }
 
 export function useGimbalControl(
   boxes: readonly PersonBox[],
   tuning: GimbalTuning = defaultGimbalTuning,
 ): GimbalControlResult {
-  const { state, send } = useBleConnection();
+  const { state, send, retry } = useBleConnection();
   const lastSentAtRef = useRef(0);
 
   useEffect(() => {
@@ -60,5 +62,5 @@ export function useGimbalControl(
     lastSentAtRef.current = now;
   }, [boxes, state.status, tuning, send]);
 
-  return { bleState: state };
+  return { bleState: state, retryBle: retry };
 }

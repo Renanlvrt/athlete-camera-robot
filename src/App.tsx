@@ -57,6 +57,7 @@ export default function App() {
           onStartRecording={recording.startRecording}
           onStopRecording={recording.stopRecording}
           bleState={gimbalControl.bleState}
+          onRetryBle={gimbalControl.retryBle}
         />
       );
   }

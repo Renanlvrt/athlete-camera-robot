@@ -30,6 +30,7 @@ interface CameraPreviewScreenProps {
   readonly onStartRecording: () => void;
   readonly onStopRecording: () => void;
   readonly bleState: BleConnectionState;
+  readonly onRetryBle: () => void;
 }
 
 /**
@@ -59,6 +60,7 @@ export function CameraPreviewScreen({
   onStartRecording,
   onStopRecording,
   bleState,
+  onRetryBle,
 }: CameraPreviewScreenProps) {
   return (
     <View style={styles.container}>
@@ -69,7 +71,7 @@ export function CameraPreviewScreen({
         outputs={[frameOutput, videoOutput]}
       />
       <TrackingOverlay boxes={boxes} frameAspectRatio={frameAspectRatio} status={detectionStatus} />
-      <BleStatusBadge state={bleState} />
+      <BleStatusBadge state={bleState} onRetry={onRetryBle} />
       <CameraControls
         facing={facing}
         onToggleFacing={onToggleFacing}

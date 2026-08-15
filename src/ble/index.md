@@ -14,10 +14,14 @@ assumes (service/characteristic UUIDs, which one to write vs. subscribe to, and 
 real bugs were found and fixed this way: the RX/TX characteristic UUIDs were reversed from what
 the Nordic UART spec's description alone suggested, and MakeCode's Bluetooth requires an
 explicit no-pairing config or it never advertises at all — see the file's own doc comment and
-`research/hardware/microbit-ble-link.md`. **This hook itself (`useBleConnection.ts`) still has
-not run** — the bench test proved the protocol facts via a standalone Python script, not this
-React Native code path, which can only be exercised inside the actual app (`CLAUDE.md` §5.2).
-Treat the *protocol* as hardware-confirmed and the *hook* as still unproven.
+`research/hardware/microbit-ble-link.md`. **2026-08-15, later same day:** the hook was installed
+on the real phone and run for the first time — it reached an `'error'` state rather than
+`'connected'`. The exact cause is still unknown (the badge only showed a generic label at the
+time, with no error detail) — this is exactly the gap `BleStatusBadge`'s tap-to-retry +
+error-message display (added right after, same day) exists to close for the *next* report.
+Treat the protocol as hardware-confirmed (via the standalone bench script) and this hook's own
+integration as **actively broken or unconfirmed, not merely untested** — first real signal was
+negative, not absent.
 
 ## Contents
 
@@ -27,7 +31,7 @@ Treat the *protocol* as hardware-confirmed and the *hook* as still unproven.
 | `base64.test.ts` | file | Empty input, 12 byte-length cases matched against `Buffer.toString('base64')`, exact padding shape for a 4-byte packet, purity | ✅ verified |
 | `encodeGimbalPacket.ts` | file | `GimbalCorrection` (degrees) → the fixed 4-byte wire packet (two big-endian signed int16 deltas, tenths of a degree) | ✅ verified — 8 tests |
 | `encodeGimbalPacket.test.ts` | file | Length, round-trip via independent `DataView` decode (positive/negative/mixed), NaN/Infinity → 0, extreme-value clamping, purity | ✅ verified |
-| `useBleConnection.ts` | file | Owns a `BleManager`, scans broadly and matches by service UUID OR advertised name (`"BBC micro:bit"` prefix — added 2026-08-15, a UUID-only filter isn't reliably enough on its own), connects, discovers characteristics, exposes `state` and a fire-and-forget `send(correction)` that writes to the hardware-confirmed RX characteristic (`6E400003`). Auto-reconnects (flat 3s retry) after any unexpected drop. | ⚠️ needs verification — `tsc --noEmit` passes, written directly against `node_modules/react-native-ble-plx/src/index.d.ts`, and the GATT layout/protocol it implements is now hardware-confirmed (see above) — but **this specific hook has never run inside the actual app**, so the reconnect logic and the RN/ble-plx integration itself remain unproven. No unit test exists for this file — a hook that's ~95% native-BLE side effects isn't meaningfully unit-testable the way the two pure files above are. |
+| `useBleConnection.ts` | file | Owns a `BleManager`, scans broadly and matches by service UUID OR advertised name (`"BBC micro:bit"` prefix — added 2026-08-15, a UUID-only filter isn't reliably enough on its own), connects, discovers characteristics, exposes `state` and a fire-and-forget `send(correction)` that writes to the hardware-confirmed RX characteristic (`6E400003`). Auto-reconnects (flat 3s retry) after any unexpected drop, plus a manual `retry()` (added 2026-08-15 after a real `'error'` report with no recovery path) that tears down and restarts the whole cycle. | ⚠️ needs verification — **and the first real attempt actively failed**, not merely "untested": installed on the phone 2026-08-15, reached `'error'` rather than `'connected'`. Exact cause unknown as of this tag (the UI didn't show the error detail at the time); `BleStatusBadge` now shows `state.error.message` and offers tap-to-retry so the next attempt actually surfaces a diagnosable cause. Do not treat this hook as working until a report comes back `'connected'`. |
 
 ## Design decisions worth knowing
 
@@ -73,6 +77,7 @@ types), `../tracking/types.ts` (`GimbalCorrection`).
 
 ## Depended on by
 `src/hooks/useGimbalControl.ts` — the control-loop hook that calls `selectPrimaryAthlete` +
-`computeGimbalCorrection` + this folder's `send()`, rate-limited to ~15Hz. Wired into
-`src/App.tsx` (called unconditionally alongside the other hooks) and surfaced to the user via
-`src/screens/BleStatusBadge.tsx`.
+`computeGimbalCorrection` + this folder's `send()`, rate-limited to ~15Hz, and passes `retry`
+straight through as `retryBle`. Wired into `src/App.tsx` (called unconditionally alongside the
+other hooks) and surfaced to the user via `src/screens/BleStatusBadge.tsx`, which calls `retry`
+when tapped.

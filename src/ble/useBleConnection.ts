@@ -104,6 +104,14 @@ export interface BleConnectionResult {
    * shows up as `'connection-lost'` via `state` instead.
    */
   readonly send: (correction: GimbalCorrection) => void;
+  /**
+   * Manual retry — tears down and restarts the whole scan/connect cycle from
+   * scratch. Added 2026-08-15 in response to a real report of the app
+   * showing `'error'` with no way to recover short of relaunching. Safe to
+   * call from any state, including `'connected'` (drops and reconnects).
+   * This is what `BleStatusBadge` calls when tapped.
+   */
+  readonly retry: () => void;
 }
 
 export function useBleConnection(): BleConnectionResult {
@@ -114,6 +122,9 @@ export function useBleConnection(): BleConnectionResult {
   const deviceRef = useRef<Device | undefined>(undefined);
 
   const [state, setState] = useState<BleConnectionState>({ status: 'waiting-for-bluetooth' });
+  // Bumping this re-runs the effect below (full teardown via its cleanup,
+  // then a fresh start) — the mechanism behind manual retry.
+  const [retryGeneration, setRetryGeneration] = useState(0);
 
   useEffect(() => {
     const manager = managerRef.current as BleManager;
@@ -194,6 +205,13 @@ export function useBleConnection(): BleConnectionResult {
         manager.cancelDeviceConnection(device.id).catch(() => {});
       }
     };
+  }, [retryGeneration]);
+
+  const retry = useCallback(() => {
+    // Immediate feedback on tap, rather than waiting for the torn-down-and-
+    // restarted effect's first onStateChange callback to fire.
+    setState({ status: 'waiting-for-bluetooth' });
+    setRetryGeneration((generation) => generation + 1);
   }, []);
 
   const send = useCallback((correction: GimbalCorrection) => {
@@ -213,5 +231,5 @@ export function useBleConnection(): BleConnectionResult {
       });
   }, []);
 
-  return { state, send };
+  return { state, send, retry };
 }
