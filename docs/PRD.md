@@ -260,13 +260,18 @@ disagrees.)*
   it would require hand-written Swift that Expo's CNG deletes on every prebuild — unworkable with
   no Mac. See `research/computer-vision/person-detection-model-choice.md`.
 - ~~GitHub Actions workflow YAML~~ → written, never run. See §3.2.
-- **PROVISIONAL — BLE message format:** fixed 4-byte packet
-  `[roll_hi, roll_lo, pitch_hi, pitch_lo]`, two big-endian **signed int16 deltas** (tenths of a
-  degree) — corrected 2026-08-14 from an earlier unsigned-absolute-angle draft that couldn't
-  represent a negative correction; see `research/hardware/microbit-ble-link.md`'s correction
-  note. Fixed width so the receiver never handles partial messages. Over the Nordic UART service
-  to start — simplest thing that can be debugged. Rate-limit sends to **10–20 Hz**, never
-  per-frame.
+- **BLE transport — hardware-confirmed 2026-08-15, no longer provisional at the mechanism
+  level.** Fixed 4-byte packet `[roll_hi, roll_lo, pitch_hi, pitch_lo]`, two big-endian **signed
+  int16 deltas** (tenths of a degree). Over the Nordic UART service — a real 20/20-ping bench
+  test proved this actually works, but only after fixing three real bugs: standard MicroPython
+  has no working BLE UART at all (the firmware is MakeCode now), MakeCode's Bluetooth needs an
+  explicit no-pairing config or it never advertises, and its RX/TX characteristic UUIDs are
+  reversed from the "standard" description. Full detail in
+  `research/hardware/microbit-ble-link.md`. Rate-limit sends to **10–20 Hz**, never per-frame —
+  still true, though the measured round-trip latency (~500ms, likely specific to the
+  confirmation-based `indicate` mechanism used for replies, not the one-way writes the real
+  control loop sends) means this number deserves a direct one-way-write measurement before
+  trusting it blindly. **Still open:** the phone-app-to-servo path end to end.
 - **PROVISIONAL — servo wiring split:** put **all three servos on the PCA9685**. One code path,
   one timing model, one power rail. See `research/hardware/pca9685-servo-control.md`.
 

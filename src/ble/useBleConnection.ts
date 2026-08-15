@@ -25,10 +25,27 @@ import { bytesToBase64 } from './base64';
  * link (`research/hardware/microbit-ble-link.md`) — easy to debug on the
  * micro:bit side, optimize only if `ble-ping` measurements say to.
  *
- * DEVICE SELECTION: connects to the first device seen advertising the
- * Nordic UART service — fine for "exactly one robot in range," which is
- * this project's actual situation. Revisit (filter by advertised name) only
- * if multiple micro:bits are ever in range at once — not a real problem yet.
+ * CHARACTERISTIC UUIDS ARE SWAPPED FROM THE "STANDARD" CONVENTION — CONFIRMED
+ * ON REAL HARDWARE, 2026-08-15. Dumping the actual GATT table off a
+ * MakeCode-flashed micro:bit (via `.claude/skills/ble-ping/scripts/bench_ping.py`,
+ * which passed 20/20 real pings) showed `6e400002` has `indicate` (not
+ * `write`) and `6e400003` has `write`/`write-without-response` (not
+ * `notify`) — the reverse of the layout this file originally assumed from
+ * the Nordic UART spec description alone. `NORDIC_UART_RX_CHARACTERISTIC_UUID`
+ * below is the real, hardware-confirmed write target. Whether this reversal
+ * is MakeCode-specific or a wider micro:bit-firmware convention is
+ * unconfirmed — re-dump the GATT table if the firmware implementation ever
+ * changes (see `bench_ping.py`'s own comment for the dump snippet).
+ *
+ * DEVICE SELECTION: also confirmed 2026-08-15 to need a NAME fallback, not
+ * service-UUID filtering alone — on Windows, the service UUID sometimes
+ * only appears in a separate scan-response packet that isn't reliably
+ * captured by every BLE scan API. iOS's Core Bluetooth stack is different
+ * and may not have this issue, but scanning broadly and filtering by EITHER
+ * signal is strictly more robust than trusting one, so this hook does both.
+ * Matches the first device seen — fine for "exactly one robot in range,"
+ * this project's actual situation. Revisit only if multiple micro:bits are
+ * ever in range at once — not a real problem yet.
  *
  * AUTO-RECONNECT (added 2026-08-14): a real BLE link can drop for reasons
  * that are expected to be transient during normal filming — the gimbal
@@ -52,8 +69,15 @@ import { bytesToBase64 } from './base64';
 
 /** Nordic UART Service — Nordic Semiconductor's own spec, a stable public UUID. */
 export const NORDIC_UART_SERVICE_UUID = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
-/** Nordic UART RX characteristic — the phone WRITES gimbal commands here. */
-export const NORDIC_UART_RX_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
+/**
+ * Where the phone WRITES gimbal commands — `6E400003`, confirmed against a
+ * real GATT dump (see the file doc comment above). NOT `6E400002` — that's
+ * the reversed layout the Nordic UART spec's description alone would
+ * suggest, and what this constant pointed to before 2026-08-15.
+ */
+export const NORDIC_UART_RX_CHARACTERISTIC_UUID = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E';
+/** Where the micro:bit sends data back (`indicate`, not `notify`) — not yet subscribed to by this hook; documented for the next feature that needs it. */
+export const NORDIC_UART_TX_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 
 /** Flat retry interval after a dropped connection — see the doc comment above on AUTO-RECONNECT. */
 const RECONNECT_DELAY_MS = 3000;
@@ -126,13 +150,21 @@ export function useBleConnection(): BleConnectionResult {
     const startScanning = (): void => {
       if (cancelled) return;
       setState({ status: 'scanning' });
-      manager.startDeviceScan([NORDIC_UART_SERVICE_UUID], null, (error, device) => {
+      // Broad scan (no UUID filter) + manual match on EITHER signal — see
+      // the file doc comment's "DEVICE SELECTION" note on why a UUID-only
+      // filter isn't trusted alone.
+      manager.startDeviceScan(null, null, (error, device) => {
         if (cancelled) return;
         if (error != null) {
           setState({ status: 'error', error });
           return;
         }
         if (device == null) return;
+        const serviceUUIDs = device.serviceUUIDs?.map((u) => u.toLowerCase()) ?? [];
+        const hasService = serviceUUIDs.includes(NORDIC_UART_SERVICE_UUID.toLowerCase());
+        const name = device.name ?? device.localName ?? '';
+        const hasName = name.startsWith('BBC micro:bit');
+        if (!hasService && !hasName) return;
         manager.stopDeviceScan();
         void connect(device);
       });

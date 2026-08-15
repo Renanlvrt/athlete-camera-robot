@@ -6,11 +6,18 @@ discover, reconnect-signal) and the wire encoding of a gimbal correction — not
 `computeGimbalCorrection.ts` plus `src/hooks/useGimbalControl.ts`, the rate-limiting control-loop
 hook that calls this folder's `send()`), and does not render anything.
 
-Written 2026-08-14, entirely against real API surfaces confirmed in `node_modules/` (`CLAUDE.md`
-§4.1) and this project's own prior research (`research/hardware/ble-plx-app-side-implementation.md`,
-`research/hardware/microbit-ble-link.md`). **Nothing in this folder has touched real hardware
-yet** — per `CLAUDE.md` §5.2, that requires a human running `.claude/skills/ble-ping/` against
-the actual micro:bit, which hasn't happened. Every status below is "implemented, not proven."
+Written 2026-08-14 against real API surfaces confirmed in `node_modules/` (`CLAUDE.md` §4.1) and
+this project's own prior research. **2026-08-15 update:** the underlying GATT layout this file
+assumes (service/characteristic UUIDs, which one to write vs. subscribe to, and that a
+"no pairing required" firmware config is required) is now confirmed against a REAL micro:bit —
+`.claude/skills/ble-ping/scripts/bench_ping.py` completed a real 20/20-ping round trip. Two
+real bugs were found and fixed this way: the RX/TX characteristic UUIDs were reversed from what
+the Nordic UART spec's description alone suggested, and MakeCode's Bluetooth requires an
+explicit no-pairing config or it never advertises at all — see the file's own doc comment and
+`research/hardware/microbit-ble-link.md`. **This hook itself (`useBleConnection.ts`) still has
+not run** — the bench test proved the protocol facts via a standalone Python script, not this
+React Native code path, which can only be exercised inside the actual app (`CLAUDE.md` §5.2).
+Treat the *protocol* as hardware-confirmed and the *hook* as still unproven.
 
 ## Contents
 
@@ -20,7 +27,7 @@ the actual micro:bit, which hasn't happened. Every status below is "implemented,
 | `base64.test.ts` | file | Empty input, 12 byte-length cases matched against `Buffer.toString('base64')`, exact padding shape for a 4-byte packet, purity | ✅ verified |
 | `encodeGimbalPacket.ts` | file | `GimbalCorrection` (degrees) → the fixed 4-byte wire packet (two big-endian signed int16 deltas, tenths of a degree) | ✅ verified — 8 tests |
 | `encodeGimbalPacket.test.ts` | file | Length, round-trip via independent `DataView` decode (positive/negative/mixed), NaN/Infinity → 0, extreme-value clamping, purity | ✅ verified |
-| `useBleConnection.ts` | file | Owns a `BleManager`, scans for the Nordic UART service, connects to the first match, discovers characteristics, exposes `state` (a discriminated union including `'connection-lost'` vs `'error'`) and a fire-and-forget `send(correction)`. Auto-reconnects (flat 3s retry) after any unexpected drop — added 2026-08-14, since a BLE link dropping briefly during normal filming (gimbal movement, someone stepping out of range) is an expected transient, not a fatal error. | ⚠️ needs verification — `tsc --noEmit` passes, written directly against `node_modules/react-native-ble-plx/src/index.d.ts`, but **has never connected to a real micro:bit** — the reconnect logic in particular has no way to be exercised without a real drop to recover from. No unit test exists for this file — a hook that's ~95% native-BLE side effects isn't meaningfully unit-testable the way the two pure files above are; its correctness claim rests entirely on matching the real library's types, not on a test suite. |
+| `useBleConnection.ts` | file | Owns a `BleManager`, scans broadly and matches by service UUID OR advertised name (`"BBC micro:bit"` prefix — added 2026-08-15, a UUID-only filter isn't reliably enough on its own), connects, discovers characteristics, exposes `state` and a fire-and-forget `send(correction)` that writes to the hardware-confirmed RX characteristic (`6E400003`). Auto-reconnects (flat 3s retry) after any unexpected drop. | ⚠️ needs verification — `tsc --noEmit` passes, written directly against `node_modules/react-native-ble-plx/src/index.d.ts`, and the GATT layout/protocol it implements is now hardware-confirmed (see above) — but **this specific hook has never run inside the actual app**, so the reconnect logic and the RN/ble-plx integration itself remain unproven. No unit test exists for this file — a hook that's ~95% native-BLE side effects isn't meaningfully unit-testable the way the two pure files above are. |
 
 ## Design decisions worth knowing
 
@@ -33,9 +40,21 @@ the actual micro:bit, which hasn't happened. Every status below is "implemented,
 - **Base64 is hand-rolled, not a polyfill dependency.** Every `react-native-ble-plx` write method
   requires it; Hermes has no `Buffer`. See `base64.ts`'s doc comment and
   `research/hardware/ble-plx-app-side-implementation.md`'s "base64 trap" section.
-- **Nordic UART service, first-match connect.** Simplest thing that can be debugged first
-  (`research/hardware/microbit-ble-link.md`) — no device-name filtering yet, fine for "exactly
-  one robot in range."
+- **Nordic UART service, first-match connect, matched by UUID or name.** Simplest thing that can
+  be debugged first (`research/hardware/microbit-ble-link.md`); scanning matches on EITHER the
+  service UUID or an advertised name starting with `"BBC micro:bit"` (not UUID alone — see the
+  file doc comment's "DEVICE SELECTION" note), fine for "exactly one robot in range."
+- **RX/TX characteristic UUIDs are reversed from the "standard" description.** Confirmed via a
+  real GATT dump 2026-08-15: write to `6E400003`, the micro:bit's outbound channel is `6E400002`
+  using `indicate` (not `notify`). Getting this backwards is exactly the kind of bug that
+  typechecks fine and silently fails at runtime — there's no way to have caught it without
+  dumping the real device.
+- **A "no pairing required" firmware config is required, or nothing advertises at all.**
+  MakeCode's Bluetooth defaults to requiring pairing/whitelisting; a micro:bit running the
+  default config never shows up in an open scan. This lives in the micro:bit-side firmware
+  config, not in this hook, but explains why "the phone can't find the robot" could mean a
+  firmware config gap rather than an app bug — see
+  `.claude/skills/gimbal-control-firmware/`.
 - **`send()` never throws and never blocks the caller on connection state.** It silently no-ops
   if not connected, and a failed in-flight write is swallowed (occasional "without response"
   drops are expected per PRD §7's rate-limiting note) — a real link problem surfaces through
