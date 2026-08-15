@@ -1,0 +1,24 @@
+{
+    "name": "gimbal-led-simulator",
+    "description": "Visualizes real gimbal-correction BLE packets on the LED matrix instead of driving servos -- for MVP validation with zero servo/motor risk.",
+    "dependencies": {
+        "core": "*",
+        "bluetooth": "*"
+    },
+    "files": [
+        "main.ts"
+    ],
+    "yotta": {
+        "config": {
+            "microbit-dal": {
+                "bluetooth": {
+                    "enabled": 1,
+                    "open": 1,
+                    "pairing_mode": 0,
+                    "whitelist": 0,
+                    "security_level": null
+                }
+            }
+        }
+    }
+}

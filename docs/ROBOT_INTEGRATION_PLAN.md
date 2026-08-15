@@ -143,8 +143,26 @@ laptop first (`bench_ping.py`), then the phone test. This is the cheapest possib
 servos, no app control loop, just "can two devices exchange 4 bytes reliably." **Do not proceed
 to §3.2 until this passes**, per that skill's own dependency note.
 
+**Status 2026-08-15: the bench half is done** — real 20/20-ping pass, see
+`testing/REAL_HARDWARE_TEST_LOG.md`. The phone half is still open.
+
 Report to `testing/REAL_HARDWARE_TEST_LOG.md` as the skill describes: found/connected/echoed,
 latency numbers, whether the link survives 60s idle.
+
+### 3.1.5 `gimbal-led-simulator` — prove the whole pipeline, with zero servo risk
+
+**Added 2026-08-15 at the user's explicit request**, and treated as a hard gate before §3.2/§3.3
+below: they will not connect the micro:bit to any motor or servo until the full CV → BLE →
+firmware pipeline is validated as an MVP some other way. Run
+`.claude/skills/gimbal-led-simulator/` — it uses the exact same wire protocol
+`gimbal-control-firmware` will eventually use, but only ever draws on the LED matrix.
+
+This is the first REAL end-to-end test of the app's own BLE code (`src/ble/useBleConnection.ts`,
+`src/hooks/useGimbalControl.ts`) — `ble-ping`'s bench test only proved the protocol and firmware
+with a standalone Python script, never the app itself. Move a real person in front of the camera
+and confirm the LED matrix reacts correctly (arrow direction, centred square, no-athlete X) —
+see the skill's own `SKILL.md` for the exact procedure. **Do not proceed to §3.2 until this is
+confirmed working** — it's the actual MVP sign-off, not `ble-ping`.
 
 ### 3.2 `servo-bounds-test` — find the real safe range
 
