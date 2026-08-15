@@ -232,6 +232,20 @@ class BleSender:
         asyncio.run(self._main())
 
     async def _main(self):
+        """
+        Outer loop auto-reconnects (matches useBleConnection.ts's philosophy) —
+        a dropped connection isn't fatal for the whole script run.
+
+        BUG FIXED 2026-08-15, real report: the original version only cleared
+        `self.connected` in an outer `finally`, and only detected a drop when
+        a WRITE happened to raise. If the connection died silently between
+        writes (or a write failed in a way that didn't raise), the loop kept
+        running and kept reporting "connected" — exactly what was reported:
+        the on-screen label said connected while the LED matrix had gone
+        dead. Fixed by polling `client.is_connected` (bleak's own live
+        connection-state check, not an inference from write success/failure)
+        on every iteration, independent of whether a write was attempted.
+        """
         from bleak import BleakClient, BleakScanner
 
         def matches(device, adv):
@@ -241,31 +255,40 @@ class BleSender:
             has_name = name.startswith("BBC micro:bit")
             return has_service or has_name
 
-        print("[ble] scanning for the robot's micro:bit (15s)...")
-        device = await BleakScanner.find_device_by_filter(matches, timeout=15.0)
-        if device is None:
-            print("[ble] NOT FOUND — is it powered and showing 'B'? BLE sending disabled for this run.")
-            return
+        while not self._stop.is_set():
+            print("[ble] scanning for the robot's micro:bit (15s)...")
+            device = await BleakScanner.find_device_by_filter(matches, timeout=15.0)
+            if device is None:
+                print("[ble] NOT FOUND — is it powered and showing 'B'? Retrying in 3s...")
+                await asyncio.sleep(3.0)
+                continue
 
-        print(f"[ble] found {device.name} [{device.address}], connecting...")
-        try:
-            async with BleakClient(device) as client:
-                print("[ble] connected — sending live gimbal corrections")
-                self.connected.set()
-                while not self._stop.is_set():
-                    try:
-                        packet = self._queue.get(timeout=0.1)
-                    except queue.Empty:
-                        continue
-                    try:
-                        await client.write_gatt_char(UART_RX_CHAR, packet, response=False)
-                    except Exception as exc:  # noqa: BLE001 — report and keep the loop alive
-                        print(f"[ble] write failed: {exc}")
-        except Exception as exc:  # noqa: BLE001 — report and exit the BLE thread cleanly
-            print(f"[ble] connection failed: {exc}")
-        finally:
-            self.connected.clear()
-            print("[ble] disconnected")
+            print(f"[ble] found {device.name} [{device.address}], connecting...")
+            try:
+                async with BleakClient(device) as client:
+                    print("[ble] connected — sending live gimbal corrections")
+                    self.connected.set()
+                    while not self._stop.is_set():
+                        if not client.is_connected:
+                            print("[ble] connection actually dropped (caught by is_connected check)")
+                            break
+                        try:
+                            packet = self._queue.get(timeout=0.1)
+                        except queue.Empty:
+                            continue
+                        try:
+                            await client.write_gatt_char(UART_RX_CHAR, packet, response=False)
+                        except Exception as exc:  # noqa: BLE001 — treat as a drop, not a thing to shrug off
+                            print(f"[ble] write failed: {exc}")
+                            break
+            except Exception as exc:  # noqa: BLE001 — report and fall through to reconnect
+                print(f"[ble] connection failed: {exc}")
+            finally:
+                self.connected.clear()
+
+            if not self._stop.is_set():
+                print("[ble] disconnected — rescanning in 3s...")
+                await asyncio.sleep(3.0)
 
 
 COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]

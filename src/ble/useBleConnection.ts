@@ -211,7 +211,40 @@ export function useBleConnection(): BleConnectionResult {
     // Immediate feedback on tap, rather than waiting for the torn-down-and-
     // restarted effect's first onStateChange callback to fire.
     setState({ status: 'waiting-for-bluetooth' });
-    setRetryGeneration((generation) => generation + 1);
+
+    // BUG FIXED 2026-08-15, real report: bumping retryGeneration immediately
+    // (the original version) re-runs the effect right away, whose CLEANUP
+    // fires `cancelDeviceConnection` but does NOT wait for it — cleanup
+    // functions can't be awaited by React. That let a brand-new
+    // `connectToDevice` call for the same peripheral start before the old
+    // connection had actually finished tearing down at the native level,
+    // which is consistent with exactly what was reported: the app claimed
+    // `'connected'` after a retry, but nothing was actually working. Fixed
+    // by explicitly awaiting the old device's teardown FIRST, then bumping
+    // the generation only once that's settled — so the effect that runs
+    // next is guaranteed to start from a clean slate.
+    //
+    // Known residual gap: if `retry()` is called while a connection attempt
+    // is still IN FLIGHT (deviceRef not yet set — connect() hasn't resolved
+    // either way), there's nothing here to explicitly cancel yet. The old
+    // effect's own `cancelled` flag still prevents it from corrupting state
+    // once it does resolve, but the native connect attempt itself isn't
+    // proactively cancelled in that specific window. Not fixed here because
+    // it can't be verified without real hardware to reproduce it against.
+    const manager = managerRef.current;
+    const device = deviceRef.current;
+    const teardownThenRetry = async (): Promise<void> => {
+      if (manager != null && device != null) {
+        try {
+          await manager.cancelDeviceConnection(device.id);
+        } catch {
+          // Already disconnected, or never truly connected — either way,
+          // the goal was just "don't race a new connect against this one."
+        }
+      }
+      setRetryGeneration((generation) => generation + 1);
+    };
+    void teardownThenRetry();
   }, []);
 
   const send = useCallback((correction: GimbalCorrection) => {
