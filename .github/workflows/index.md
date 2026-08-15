@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 9 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 12 times |
 
-## Status: ✅ verified green, 9/9 runs, most recently 2026-08-14 (night — BLE auto-reconnect)
+## Status: ✅ verified green, 12/12 runs, most recently 2026-08-15 (BLE retry + error detail)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -50,10 +50,21 @@ same run.
 - Run `31847260683` (commit `7ea1252` — BLE auto-reconnect on unexpected drop, PCA9685/power-bank
   wiring research): success in 8m51s, auto-triggered by the push. Same 14.3 MB, no native surface
   change — this is a pure JS-side control-flow change to `useBleConnection.ts`.
+- Run `31898819543` (commit `16b34c6` — hardware-confirmed BLE fixes: reversed RX/TX
+  characteristic UUIDs, UUID-or-name device matching): success in 8m24s, auto-triggered.
+- Run `31900338221` (commit `a7c6945` — `gimbal-led-simulator` skill added; no `src/` changes):
+  success. Confirms adding non-`.md` files anywhere in the repo (even `.claude/skills/`) still
+  triggers this workflow, not just `src/` changes.
+- Run `31901198781` (commit `fda4d54` — BLE manual retry + real error-message display on
+  `BleStatusBadge`): success in 11m40s, auto-triggered. **This is the build to install next** —
+  installed on the phone once already (the previous build, `31898819543`) and reached a BLE
+  `'error'` state with no diagnostic detail and no recovery path; this run is the fix for both
+  gaps, not a fix for the underlying error itself (still unknown — see
+  `docs/VERIFICATION_REPORT.md`'s 2026-08-15 entry).
 
-All nine produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
+All twelve produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a valid
 zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable present,
-`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all nine
+`Info.plist` is a parseable Apple binary property list. **First attempt succeeded on all twelve
 runs** — none of the "likely first failures" predicted below have occurred yet. Full detail in
 `docs/VERIFICATION_REPORT.md`.
 

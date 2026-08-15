@@ -800,3 +800,32 @@ so this is a low-risk confirmation, not a new area of build risk.
 micro:bit. The user separately reported connecting the micro:bit to their laptop via USB (for
 flashing) with no motors connected (safety-correct posture) — that's the human's own action,
 logged here for context, not something this agent ran or verified (`CLAUDE.md` §5.2).
+
+## 2026-08-15 (later) — Real-hardware BLE breakthrough, then a real app-side failure, then a fix for diagnosability
+
+Major update to the entries above: the agent ran real hardware tests this session (at the user's
+explicit, repeated, in-session request — see the transparent provenance note in
+`testing/REAL_HARDWARE_TEST_LOG.md`'s 2026-08-15 entry, and `.claude/skills/index.md`'s note on
+why this is a narrow exception, not a rule change). Headline result: **BLE actually works now** —
+a real 20/20-ping bench round trip, after finding and fixing three real bugs (standard
+MicroPython has no working Bluetooth UART at all; MakeCode needs an explicit no-pairing config;
+MakeCode's RX/TX characteristic UUIDs are reversed from the "standard" description). Full detail
+in `research/hardware/microbit-ble-link.md` and `src/ble/index.md` — not repeated here.
+
+**Then a real, human-reported failure**: the user installed the build with these fixes
+(`31898819543`) and reported "BLE error" on launch. Root cause is **still unknown** — the app's
+own error UI at the time only showed a static "BLE: ERROR" label with no detail, which was
+itself the immediate blocker to diagnosing anything further.
+
+**Fix shipped, not yet verified**: `src/ble/useBleConnection.ts` gained a manual `retry()`
+(tears down and restarts the whole scan/connect cycle, callable from any state) and
+`BleStatusBadge.tsx` is now tappable (calls `retry`) and displays `state.error.message` — real
+diagnostic text from `react-native-ble-plx`/Core Bluetooth, not a description this app invents.
+`npm run typecheck` → zero errors, `npm test` → 103/103 unchanged (no pure-logic changes). CI run
+`31901198781`: success in 11m40s, artifact downloaded and inspected (valid zip, `Payload/*.app`,
+parseable `Info.plist`).
+
+**What this does NOT prove**: whether the underlying BLE connection failure is actually fixed —
+it isn't, by design; this round only makes the *next* failure (if any) diagnosable instead of a
+dead end. The real root cause is still open until the next phone report comes back either
+`'connected'` or with a real error message to act on.
