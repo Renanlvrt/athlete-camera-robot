@@ -24,6 +24,32 @@ file exists to prevent.
 
 ---
 
+## 2026-08-16 (later still) — Webcam detection accuracy: human-confirmed live, isolates a real-device regression to iOS-only code
+
+- **Ran:** `.claude/skills/webcam-detection-preview/scripts/detect_preview.py`, three ways: a
+  static `--capture` (normal), a static `--capture --mirror` (front-camera-equivalent), and
+  `--live` (a real-time window on the user's own screen).
+- **Hardware present:** Windows laptop's built-in webcam, the developer physically in frame. No
+  phone, micro:bit, or robot involved — this isolates the shared (non-iOS) half of the pipeline.
+- **Result:** ✅ worked. The two static captures were agent-assessed (inspected the saved PNGs
+  directly — box tightly and correctly wrapped the person in both the normal and mirrored case).
+  The `--live` window is the stronger result: it ran on the developer's own screen and they
+  watched it themselves, reporting back directly: **"In the video webcam it's extremely
+  accurate."** That's a genuine human observation, not an agent self-report.
+- **Numbers:** Not measured formally (not a `--session` run) — qualitative confirmation only.
+- **Surprises:** None — this was run specifically to test a hypothesis (is the shared decode/
+  mirror/continuity logic broken, or is this iOS-only?) and the hypothesis resolved cleanly:
+  shared logic is fine.
+- **Follow-up:** This is real, useful evidence about WHERE a fresh box-placement regression
+  (front camera now wrong, back camera detecting nothing — reported same day, after the
+  back-camera rotation re-fix + continuity-lock shipped) is NOT — it structurally cannot exercise
+  `Frame.orientation`/`orientBox()` at all (a webcam frame has no rotation concept), so it
+  narrows the remaining search to that iOS-only code path. Led to shipping
+  `src/screens/DebugReadout.tsx`, a temporary on-screen diagnostic, instead of re-deriving the
+  rotation math a third time — see `docs/VERIFICATION_REPORT.md`'s matching entry. Also used to
+  catch that `detect_preview.py`'s `select_primary_athlete` port was stale (missing the
+  continuity-lock addition) — fixed in the same pass.
+
 ## 2026-08-16 (later) — BLE connect-timeout fix confirmed: "Forget This Device" + timeout fix = connects
 
 - **Ran:** The phone app (build `31968575854`, the connect-timeout fix build), after the user

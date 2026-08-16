@@ -1041,3 +1041,61 @@ numbers show it scoring *lower* mAP than V1 at this input size.
 the timeout fix alone might not be sufficient without the user also doing the iOS
 "Forget This Device" step. Whether the occlusion confidence-floor change measurably helps on real
 occluded footage is also untested — it's a precedented, low-risk mechanism, not a proven result.
+
+## 2026-08-16 (later still) — BLE confirmed working; new box regression on BOTH cameras; webcam test isolates it to iOS-only code; diagnostic overlay shipped instead of a third guess
+
+**BLE**: real human confirmation — "the forget thing worked!!!!". The developer used iOS
+Settings > Bluetooth > "Forget This Device" on the micro:bit, relaunched the app, and it reached
+`'connected'`. Confirms both the `CONNECT_TIMEOUT_MS` code fix and the stale-bond root-cause
+hypothesis; logged in `testing/REAL_HARDWARE_TEST_LOG.md`, confidence upgraded to high in
+`research/hardware/ios-ble-pairing-mismatch.md`. Separately clarified for the user (and worth
+recording): attempting to connect to a custom, unencrypted BLE peripheral directly via iOS
+Settings is not expected to work at all regardless of app-side correctness — Settings' pairing
+UI is built around bondable/encrypted accessories, and confirmed via web research
+(`punchthrough.com`'s CoreBluetooth guide, an Ezurio support FAQ) that "BLE-only devices are
+hidden unless a dedicated app is used for pairing" and iOS won't pair at all unless a
+characteristic specifically requests encryption — which this firmware deliberately doesn't. A
+Settings-initiated connect failing there is not evidence of anything being broken.
+
+**New regression, real report**: with the back-camera rotation re-fix and continuity-lock both
+shipped, the developer reported the box now wrong on the FRONT camera too (previously correct),
+and the BACK camera detecting nothing at all (a new, different symptom from "wrong box" —
+genuinely zero detections). Rather than re-derive the rotation math a third time (the first two
+rounds each looked correct on paper and were still wrong on-device), asked the user directly and
+they agreed: ship on-screen diagnostics first.
+
+**Isolated via `.claude/skills/webcam-detection-preview/`**: ran a live session and two captures
+(normal + `--mirror`) with the developer physically in frame. Both showed the box tightly and
+correctly wrapping the person — confirms the shared decode/mirror/continuity-selection logic is
+NOT the cause of either symptom. This structurally narrows the search: the webcam has no
+rotation concept at all (`Frame.orientation`/`orientBox()` never runs in the Python port), so
+this result specifically rules out everything EXCEPT the iOS/VisionCamera-only code path — which
+is exactly the code that's been wrong twice. Also updated `detect_preview.py`'s
+`select_primary_athlete` port to match today's continuity-lock addition (it was stale, missing
+`previous_lock` entirely), threading `previous_lock` through the `--session`/`--live` loops — the
+"keep in sync" rule this skill documents for itself.
+
+**A second, real, code-review-found bug fixed** (not the rotation math — a different, concrete
+defect): `useAthleteDetection.ts`'s `hasSetAspectRatio` latched `true` permanently on the very
+first processed frame and never reset. Since this hook is never remounted by the front/back
+toggle (`src/App.tsx` calls it once, unconditionally), switching cameras mid-session kept using
+the FIRST camera's aspect ratio for both — silently wrong for whichever camera was switched to.
+Fixed: both `frameAspectRatio` and the new diagnostic `rawOrientation` now reset via a
+`useEffect` keyed on `cameraPosition`. This is a plausible PARTIAL explanation for the front
+regression if the developer toggled cameras mid-session, but not a full explanation on its own
+(doesn't explain back camera's zero-detections symptom) — not claimed as "the fix," just a real
+defect found and closed.
+
+**Diagnostic overlay shipped instead of a third blind fix**: new `src/screens/DebugReadout.tsx`
+(explicitly marked TEMPORARY, delete-after-use), wired through `useAthleteDetection.ts`'s new
+`rawOrientation` field, `CameraPreviewScreen.tsx`, and `App.tsx`. Shows camera position, raw
+`Frame.orientation`, mirror flag, live detection count, and `frameAspectRatio` on-screen. The
+next phone report will contain the actual numbers `orientBox`'s math depends on, instead of
+another inference.
+
+`npm run typecheck` → zero errors, `npm test` → 112/112 (unchanged — this round touched no
+tracking logic, only wiring + a new presentational component).
+
+**What this does NOT prove**: the actual root cause of either camera's regression — that's
+exactly what's still unknown and why the diagnostic build exists. The webcam result is real
+evidence about WHERE the bug isn't, not a fix.

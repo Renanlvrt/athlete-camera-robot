@@ -100,17 +100,69 @@ def decode_detections(boxes, classes, scores, min_score=DEFAULT_MIN_SCORE, perso
 
 
 # --- src/tracking/selectPrimaryAthlete.ts port -------------------------------
+# Updated 2026-08-16 for that file's continuity-match addition (IoU / center-
+# distance matching against a previous lock, with a lower confidence floor
+# for continuity than fresh acquisition — the ByteTrack pattern). NOT ported
+# here: src/hooks/useLockedAthlete.ts's LOCK_MEMORY_MS grace period (keeps
+# offering a stale lock for ~1s through a total-detection gap) — that's
+# React-hook state with no equivalent construct in this script's per-frame
+# call pattern, and is a smaller behavioural refinement than the continuity
+# match itself. Known gap, not an oversight.
 
 MIN_CONFIDENCE = 0.4
+CONTINUITY_MIN_CONFIDENCE = 0.25
+CONTINUITY_IOU_THRESHOLD = 0.15
+CONTINUITY_CENTER_DISTANCE = 0.2
 
 
-def select_primary_athlete(boxes):
+def _box_area(box):
+    return box["width"] * box["height"]
+
+
+def _intersection_over_union(a, b):
+    ax2, ay2 = a["x"] + a["width"], a["y"] + a["height"]
+    bx2, by2 = b["x"] + b["width"], b["y"] + b["height"]
+    ix1, iy1 = max(a["x"], b["x"]), max(a["y"], b["y"])
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    intersection = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    union = _box_area(a) + _box_area(b) - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+def _center_distance(a, b):
+    ax, ay = a["x"] + a["width"] / 2, a["y"] + a["height"] / 2
+    bx, by = b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
+    return math.hypot(ax - bx, ay - by)
+
+
+def _find_continued_lock(boxes, previous_lock):
+    best = None
+    best_iou = -1.0
+    best_distance = math.inf
+    for box in boxes:
+        if box["confidence"] < CONTINUITY_MIN_CONFIDENCE:
+            continue
+        iou = _intersection_over_union(box, previous_lock)
+        distance = _center_distance(box, previous_lock)
+        if iou < CONTINUITY_IOU_THRESHOLD and distance > CONTINUITY_CENTER_DISTANCE:
+            continue
+        if iou > best_iou or (iou == best_iou and distance < best_distance):
+            best_iou, best_distance, best = iou, distance, box
+    return best
+
+
+def select_primary_athlete(boxes, previous_lock=None):
+    if previous_lock is not None:
+        continued = _find_continued_lock(boxes, previous_lock)
+        if continued is not None:
+            return continued
+
     best = None
     best_area = -1.0
     for box in boxes:
         if box["confidence"] < MIN_CONFIDENCE:
             continue
-        area = box["width"] * box["height"]
+        area = _box_area(box)
         if area > best_area:
             best_area = area
             best = box
@@ -430,12 +482,17 @@ def draw_phase_label(frame_bgr, label):
 # --- pipeline -----------------------------------------------------------------
 
 
-def run_detection(interpreter, frame_bgr, is_mirrored=False):
+def run_detection(interpreter, frame_bgr, is_mirrored=False, previous_lock=None):
     """Run detection on `frame_bgr`. If `is_mirrored`, the model is fed a
     horizontally-flipped copy of the frame (simulating a front/selfie camera's
     raw buffer) and the resulting boxes are un-mirrored back — callers should
     always draw the result on the ORIGINAL `frame_bgr`, never a flipped copy,
-    same as the real app never shows the raw mirrored buffer to the user."""
+    same as the real app never shows the raw mirrored buffer to the user.
+
+    `previous_lock` threads continuity matching across calls, same as
+    `useLockedAthlete.ts` — pass the previous call's returned `athlete` back
+    in on the next call to get the same "keep following, don't re-pick every
+    frame" behaviour the real app has (2026-08-16)."""
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
@@ -452,7 +509,7 @@ def run_detection(interpreter, frame_bgr, is_mirrored=False):
     scores = interpreter.get_tensor(output_details[2]["index"])[0]
 
     detections = decode_detections(boxes, classes, scores, is_mirrored=is_mirrored)
-    athlete = select_primary_athlete(detections)
+    athlete = select_primary_athlete(detections, previous_lock=previous_lock)
     readout = compute_tracking_readout(athlete) if athlete is not None else None
     return detections, athlete, readout
 
@@ -478,6 +535,7 @@ def run_session(interpreter, cap, name, duration, output_dir, snapshot_interval,
         writer.writerow(
             ["elapsed_s", "num_detections", "confidence", "offset_pct", "angle_degrees", "is_centered"]
         )
+        previous_lock = None
         while True:
             elapsed = time.monotonic() - start
             if elapsed >= duration:
@@ -486,7 +544,10 @@ def run_session(interpreter, cap, name, duration, output_dir, snapshot_interval,
             if not ok:
                 continue
 
-            detections, athlete, readout = run_detection(interpreter, frame, is_mirrored=mirrored)
+            detections, athlete, readout = run_detection(
+                interpreter, frame, is_mirrored=mirrored, previous_lock=previous_lock
+            )
+            previous_lock = athlete
             row = [
                 round(elapsed, 2),
                 len(detections),
@@ -619,12 +680,16 @@ def main():
                 ble_sender.start()
 
             print("Live preview running. Press 'q' in the window to quit.")
+            previous_lock = None
             try:
                 while True:
                     ok, frame = cap.read()
                     if not ok:
                         break
-                    _, athlete, readout = run_detection(interpreter, frame, is_mirrored=args.mirror)
+                    _, athlete, readout = run_detection(
+                        interpreter, frame, is_mirrored=args.mirror, previous_lock=previous_lock
+                    )
+                    previous_lock = athlete
                     annotated = draw_overlay(frame, athlete, readout)
 
                     if ble_sender is not None:

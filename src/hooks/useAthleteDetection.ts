@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useFrameOutput,
   type CameraFrameOutput,
@@ -84,6 +84,17 @@ export interface AthleteDetectionResult {
   readonly frameOutput: CameraFrameOutput;
   /** The camera frame's width/height ratio, from the first frame seen. Undefined until then. */
   readonly frameAspectRatio: number | undefined;
+  /**
+   * The raw `Frame.orientation` value from the most recently processed
+   * frame — surfaced purely as a DIAGNOSTIC (2026-08-16), after two rounds
+   * of orientation-rotation fixes that each looked correct on paper and
+   * derivation but were still wrong on the real device. Rather than guess a
+   * third time, this lets `TrackingOverlay.tsx` show the real value on
+   * screen so the next report is measured data, not another inference. Undo
+   * once `orientBox`'s formulas are confirmed correct for both cameras on
+   * real hardware — see `src/tracking/decodeDetections.ts`.
+   */
+  readonly rawOrientation: BufferOrientation | undefined;
 }
 
 /**
@@ -107,9 +118,24 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
 
   const [boxes, setBoxes] = useState<readonly PersonBox[]>([]);
   const [frameAspectRatio, setFrameAspectRatio] = useState<number | undefined>(undefined);
+  const [rawOrientation, setRawOrientation] = useState<BufferOrientation | undefined>(undefined);
   const hasSetAspectRatio = useRef(false);
 
   const isMirrored = cameraPosition === 'front';
+
+  // BUG FIXED 2026-08-16: `hasSetAspectRatio` used to latch permanently true
+  // on the very first processed frame and never reset — so toggling the
+  // front/back camera mid-session (this hook is never remounted by that
+  // toggle, see src/App.tsx) kept using the FIRST camera's aspect ratio
+  // forever, silently wrong for whichever camera was switched to after.
+  // Reset both the aspect ratio and the diagnostic orientation reading
+  // whenever the resolved camera actually changes, so they're always
+  // recomputed fresh for the camera currently in use.
+  useEffect(() => {
+    hasSetAspectRatio.current = false;
+    setFrameAspectRatio(undefined);
+    setRawOrientation(undefined);
+  }, [cameraPosition]);
 
   const publishDetections = useCallback(
     (
@@ -119,6 +145,7 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
       orientation: BufferOrientation,
     ) => {
       setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores, { isMirrored, orientation }));
+      setRawOrientation(orientation);
     },
     [isMirrored],
   );
@@ -180,5 +207,5 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
     status = 'ready';
   }
 
-  return { status, error, boxes, frameOutput, frameAspectRatio };
+  return { status, error, boxes, frameOutput, frameAspectRatio, rawOrientation };
 }

@@ -4,6 +4,7 @@ import {
   Camera,
   type CameraDevice,
   type CameraFrameOutput,
+  type CameraPosition,
   type CameraVideoOutput,
 } from 'react-native-vision-camera';
 
@@ -12,9 +13,11 @@ import type { DetectionStatus } from '../hooks/useAthleteDetection';
 import type { RecordingStatus, SaveStatus } from '../hooks/useVideoRecording';
 import type { BleConnectionState } from '../ble/useBleConnection';
 import type { PrimaryAthleteResult } from '../tracking/types';
+import type { BufferOrientation } from '../tracking/decodeDetections';
 import { CameraControls } from './CameraControls';
 import { TrackingOverlay } from './TrackingOverlay';
 import { BleStatusBadge } from './BleStatusBadge';
+import { DebugReadout } from './DebugReadout';
 
 interface CameraPreviewScreenProps {
   readonly device: CameraDevice;
@@ -31,6 +34,12 @@ interface CameraPreviewScreenProps {
   readonly onStopRecording: () => void;
   readonly bleState: BleConnectionState;
   readonly onRetryBle: () => void;
+  /** Resolved camera position, for `DebugReadout` — see that component's own doc comment (TEMPORARY). */
+  readonly cameraPosition: CameraPosition;
+  /** Raw `Frame.orientation`, for `DebugReadout` — see that component's own doc comment (TEMPORARY). */
+  readonly rawOrientation: BufferOrientation | undefined;
+  /** Count of every detection this frame, before selection — for `DebugReadout` (TEMPORARY). */
+  readonly boxCount: number;
 }
 
 /**
@@ -61,6 +70,9 @@ export function CameraPreviewScreen({
   onStopRecording,
   bleState,
   onRetryBle,
+  cameraPosition,
+  rawOrientation,
+  boxCount,
 }: CameraPreviewScreenProps) {
   return (
     <View style={styles.container}>
@@ -72,6 +84,13 @@ export function CameraPreviewScreen({
       />
       <TrackingOverlay primary={primary} frameAspectRatio={frameAspectRatio} status={detectionStatus} />
       <BleStatusBadge state={bleState} onRetry={onRetryBle} />
+      <DebugReadout
+        cameraPosition={cameraPosition}
+        rawOrientation={rawOrientation}
+        isMirrored={cameraPosition === 'front'}
+        boxCount={boxCount}
+        frameAspectRatio={frameAspectRatio}
+      />
       <CameraControls
         facing={facing}
         onToggleFacing={onToggleFacing}

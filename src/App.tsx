@@ -63,6 +63,9 @@ export default function App() {
           onStopRecording={recording.stopRecording}
           bleState={gimbalControl.bleState}
           onRetryBle={gimbalControl.retryBle}
+          cameraPosition={cameraPosition}
+          rawOrientation={detection.rawOrientation}
+          boxCount={detection.boxes.length}
         />
       );
   }
