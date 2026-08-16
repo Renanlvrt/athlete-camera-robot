@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 15 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 17 times |
 
-## Status: ✅ verified green, 15/15 runs, most recently 2026-08-16 (back-camera rotation re-fix)
+## Status: ✅ verified green, 17/17 runs, most recently 2026-08-16 (BLE connect-timeout + occlusion tolerance)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -70,14 +70,26 @@ same run.
   `orientBox()` had its `'left'`/`'right'` case formulas swapped with each other, confirmed
   broken on a real phone; re-derived from VisionCamera's iOS `CameraOrientation`->EXIF-tag
   mapping and corrected): success, auto-triggered by the push. Artifact still 14.3 MB (pure
-  JS-side math change in `src/tracking/`, no native surface touched). **This is the build to
-  install next** — see `docs/VERIFICATION_REPORT.md`'s 2026-08-16 "did NOT work" entry for what
-  changed and why it still needs a real back-camera phone test before being trusted.
+  JS-side math change in `src/tracking/`, no native surface touched). User reported "seems
+  better" 2026-08-16 (not a full confirmation).
+- Run `31967884043` (commit `d7fb92e` — continuity-based multi-athlete lock, fixing a real report
+  that multi-athlete selection "seems all random"): success in 9m23s, auto-triggered. Same 14.3
+  MB, pure JS-side change (`src/tracking/selectPrimaryAthlete.ts` + new
+  `src/hooks/useLockedAthlete.ts`).
+- Run `31968575854` (commit `3e3ce0f` — BLE connect-timeout fix for the real "stuck at
+  'connecting' forever" report, plus a ByteTrack-style occlusion-confidence fix for
+  `selectPrimaryAthlete.ts`'s continuity match): success, auto-triggered by the push. Same 14.3
+  MB. Downloaded and inspected directly: valid zip, `athletecamerarobot` Mach-O executable and
+  `Info.plist` both present. **This is the build to install next** — it's cumulative, so it also
+  carries the back-camera rotation and continuity-lock fixes above. See
+  `docs/VERIFICATION_REPORT.md`'s 2026-08-16 (later) entry for the full BLE root-cause writeup —
+  if the phone still doesn't reach `'connected'` after this build, try iOS Settings > Bluetooth >
+  "Forget This Device" for the micro:bit before assuming the fix failed.
 
-All fifteen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
+All seventeen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
 valid zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable
 present, `Info.plist` is a parseable Apple binary property list. **First attempt succeeded on
-all fifteen runs** — none of the "likely first failures" predicted below have occurred yet.
+all seventeen runs** — none of the "likely first failures" predicted below have occurred yet.
 Full detail in `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical
