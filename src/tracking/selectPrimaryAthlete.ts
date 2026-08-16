@@ -11,7 +11,9 @@
 import type { PersonBox, PrimaryAthleteResult } from './types';
 
 /**
- * Minimum confidence for a detection to be considered at all.
+ * Minimum confidence for a FRESH acquisition — i.e. a box with no
+ * relationship to any existing lock. Used by the largest-area fallback below,
+ * and NOT by continuity matching (see `CONTINUITY_MIN_CONFIDENCE`).
  *
  * Low-confidence boxes from a small quantized model are frequently noise —
  * background objects, partial bodies at the frame edge. Following one makes the
@@ -19,6 +21,26 @@ import type { PersonBox, PrimaryAthleteResult } from './types';
  * than briefly following nobody.
  */
 export const MIN_CONFIDENCE = 0.4;
+
+/**
+ * Minimum confidence for a box to continue an EXISTING lock — deliberately
+ * lower than `MIN_CONFIDENCE`. The ByteTrack two-stage association pattern
+ * (Zhang et al., ECCV 2022 — see `research/computer-vision/occlusion-robustness.md`):
+ * don't let a real, still-visible athlete's box get dropped just because
+ * partial occlusion knocked its confidence down, AS LONG AS it's still
+ * sitting where the lock already is (gated by `findContinuedLock`'s IoU/
+ * center-distance check, not by confidence alone — that spatial gate is what
+ * keeps this narrow instead of being a blanket "trust more noise" change).
+ * Fresh acquisition keeps the stricter `MIN_CONFIDENCE` floor specifically
+ * because it has no spatial gate to fall back on — a low-confidence box with
+ * no history is exactly the "background noise" case `MIN_CONFIDENCE`'s own
+ * doc comment warns about.
+ *
+ * A starting guess, not a measured value — like every other tunable in this
+ * folder (`defaultGimbalTuning`, `LOCK_MEMORY_MS`), tune it from a real field
+ * test once occlusion behaviour can actually be observed on real footage.
+ */
+const CONTINUITY_MIN_CONFIDENCE = 0.25;
 
 /** Area of a box in normalised units. */
 function area(box: PersonBox): number {
@@ -88,7 +110,7 @@ function findContinuedLock(
   for (let i = 0; i < boxes.length; i += 1) {
     const box = boxes[i];
     if (box === undefined) continue;
-    if (box.confidence < MIN_CONFIDENCE) continue;
+    if (box.confidence < CONTINUITY_MIN_CONFIDENCE) continue;
 
     const iou = intersectionOverUnion(box, previousLock);
     const distance = centerDistance(box, previousLock);

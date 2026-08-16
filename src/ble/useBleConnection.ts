@@ -60,11 +60,27 @@ import { bytesToBase64 } from './base64';
  * or logs against a genuinely-gone robot (e.g. powered off, out of range for
  * the rest of the session).
  *
+ * CONNECT TIMEOUT (added 2026-08-16): a real report showed the app stuck at
+ * `'connecting'` forever on a real iPhone — never reaching `'connected'` or
+ * `'error'`. Root-caused: `connectToDevice` was called with no `timeout`,
+ * and iOS's CoreBluetooth (unlike Android) has no OS-level connect timeout
+ * of its own — see `CONNECT_TIMEOUT_MS`'s own doc comment and
+ * `research/hardware/react-native-ble-plx-ios-connect-api.md` for the full,
+ * source-verified mechanism. This makes a stalled attempt surface as a
+ * normal, retryable `'error'` instead of hanging silently. It does not by
+ * itself explain WHY the connection stalls — see that constant's comment for
+ * the leading suspect (a stale iOS Bluetooth bond from this micro:bit's
+ * earlier MicroPython-firmware life).
+ *
  * UNVERIFIED — CANNOT BE VERIFIED WITHOUT REAL HARDWARE (`CLAUDE.md` §5.2).
- * This hook has never connected to a real micro:bit. It typechecks and is
- * written directly against the real API, but "an agent may never mark a
- * hardware behaviour as working" — that requires `.claude/skills/ble-ping/`
- * run by a human. Treat every status here as implemented, not proven.
+ * This hook HAS connected to a real micro:bit before (an early real-device
+ * report confirmed a first connect succeeding), but every fix made since —
+ * the retry-race fix, the RX/TX UUID correction, and this connect-timeout
+ * fix — is implemented and typechecks, not yet independently confirmed
+ * working end-to-end on the phone. "An agent may never mark a hardware
+ * behaviour as working" — that requires `.claude/skills/ble-ping/` (or the
+ * real app) run by a human. Treat every status here as implemented, not
+ * proven, until a fresh real-device report says otherwise.
  */
 
 /** Nordic UART Service — Nordic Semiconductor's own spec, a stable public UUID. */
@@ -81,6 +97,41 @@ export const NORDIC_UART_TX_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E2
 
 /** Flat retry interval after a dropped connection — see the doc comment above on AUTO-RECONNECT. */
 const RECONNECT_DELAY_MS = 3000;
+
+/**
+ * How long to wait for `connectToDevice` before giving up and surfacing
+ * `'error'`.
+ *
+ * REQUIRED ON iOS, not just a nicety: confirmed 2026-08-16 (real report — the
+ * app got stuck at `'connecting'` forever on a real iPhone, never reaching
+ * `'connected'` OR `'error'`) and root-caused via
+ * `research/hardware/react-native-ble-plx-ios-connect-api.md` — this project
+ * was calling `connectToDevice(device.id)` with no second argument, and
+ * iOS's CoreBluetooth does NOT time out a connect attempt on its own (unlike
+ * Android, which has an OS-level backstop). Per that research, the
+ * underlying native module (`MultiPlatformBleAdapter`'s `BleModule.swift`)
+ * only wraps the connection in a deadline when a JS-supplied `timeout` is
+ * given — with none, nothing ever forces the promise to resolve OR reject if
+ * CoreBluetooth itself stalls. This constant is that deadline. Once it fires,
+ * a stuck connection now lands in the existing `'error'` state (with the
+ * existing manual retry button) instead of hanging silently forever.
+ *
+ * 15s, not the research file's example 10s — generous enough to not misfire
+ * on ordinary BLE handshake variance while still giving feedback well within
+ * a user's patience. A starting guess, not a measured value; tune down if a
+ * real report shows it's unnecessarily slow to surface a real failure.
+ *
+ * NOTE: a timeout turns a silent hang into a VISIBLE, retryable error — it
+ * does not by itself explain why the connection stalled. The leading
+ * hypothesis for the underlying trigger (see
+ * `research/hardware/ios-ble-pairing-mismatch.md`) is a stale iOS Bluetooth
+ * bond left over from this micro:bit's earlier MicroPython-firmware life
+ * (same hardware Bluetooth address, different firmware) — if this timeout
+ * alone doesn't get the phone to `'connected'`, the next thing to try is
+ * iOS Settings > Bluetooth > find the micro:bit entry > "Forget This
+ * Device", then retry.
+ */
+const CONNECT_TIMEOUT_MS = 15000;
 
 export type BleConnectionState =
   | { readonly status: 'waiting-for-bluetooth' }
@@ -135,7 +186,7 @@ export function useBleConnection(): BleConnectionResult {
     const connect = async (device: Device): Promise<void> => {
       setState({ status: 'connecting' });
       try {
-        const connected = await manager.connectToDevice(device.id);
+        const connected = await manager.connectToDevice(device.id, { timeout: CONNECT_TIMEOUT_MS });
         if (cancelled) return;
         await manager.discoverAllServicesAndCharacteristicsForDevice(connected.id);
         if (cancelled) return;

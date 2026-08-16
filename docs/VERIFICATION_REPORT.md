@@ -976,3 +976,68 @@ watching real multi-athlete footage — untested on a phone as of this entry. Al
 occlusion's ROOT cause (the model producing a smaller/lower-confidence/missing box in the first
 place) — only makes the selection layer more resilient to whatever imperfect boxes the model
 does produce. The detection-accuracy research (item 3) is the other half of this.
+
+## 2026-08-16 (later) — BLE connect-timeout fix, ByteTrack-style occlusion tolerance, both from a 4-agent parallel research push
+
+Following the items 2 and 3 above, dispatched 4 parallel `researcher` subagents (explicitly
+requested: "deploy all the subagents possible to diagnosis, then research with all the agents"):
+two independently investigating the BLE stuck-at-`'connecting'` bug from different angles
+(CoreBluetooth pairing/bonding theory; and a direct audit of `react-native-ble-plx`'s real iOS
+connect API in `node_modules`, since the actual native connection logic turned out to live in an
+external CocoaPod, `MultiPlatformBleAdapter`, not in the npm package itself), and one on
+occlusion-robust detection. Before dispatching, personally ruled out one hypothesis directly:
+downloaded CI run `31962301870`'s real built `.ipa`, extracted and parsed the actual `Info.plist`
+with `plistlib`, and confirmed `NSBluetoothAlwaysUsageDescription` and `UIBackgroundModes:
+['bluetooth-central']` are both correctly present — so this was never a missing-permission-string
+bug, and the agents were briefed not to re-check it.
+
+**BLE fix, applied**: all three BLE-focused findings converged. `src/ble/useBleConnection.ts`
+called `manager.connectToDevice(device.id)` with no second argument; per
+`research/hardware/react-native-ble-plx-ios-connect-api.md` (which fetched
+`MultiPlatformBleAdapter`'s real Swift source directly, since it's not present in this repo's
+`node_modules`), iOS's CoreBluetooth has no OS-level connect timeout of its own (unlike Android),
+and the library only arms one when a JS `timeout` option is supplied — with none, a stalled
+native attempt has nothing that will ever force the JS promise to resolve or reject, matching the
+reported symptom exactly. Fixed: `connectToDevice(device.id, { timeout: CONNECT_TIMEOUT_MS })`,
+`CONNECT_TIMEOUT_MS = 15000`. This makes a stall surface as the existing, already-built `'error'`
+state (with its existing manual retry button) instead of hanging silently forever — but it does
+NOT explain the underlying trigger. The leading hypothesis for that (medium confidence, from
+`research/hardware/ios-ble-pairing-mismatch.md` and `research/hardware/ios-ble-connect-hang.md`):
+a stale iOS Bluetooth bond left over from this exact micro:bit's earlier MicroPython-firmware
+life — the board's hardware Bluetooth address doesn't change across reflashes, and the firmware's
+`pairing_mode: 0` can only prevent a NEW bond, not erase an old cached one; iOS gives apps no API
+to clear this. **If the timeout fix alone doesn't reach `'connected'` on the next phone test, try
+iOS Settings > Bluetooth > find the micro:bit entry > "Forget This Device" > relaunch the app >
+retry, before assuming the timeout fix failed.** `npm run typecheck` → zero errors.
+
+**Occlusion fix, applied (partial)**: per `research/computer-vision/occlusion-robustness.md`,
+implemented the ByteTrack (Zhang et al., ECCV 2022) two-stage confidence pattern —
+`selectPrimaryAthlete.ts`'s continuity match (`findContinuedLock`) now accepts a lower confidence
+floor, `CONTINUITY_MIN_CONFIDENCE = 0.25`, than fresh acquisition's `MIN_CONFIDENCE = 0.4`. A
+real athlete's box dipping in confidence under partial occlusion no longer loses the lock, as
+long as it's still spatially where the lock already is — gated by the existing IoU/center-distance
+check, not by confidence alone, which keeps this narrow rather than a blanket "trust more noise"
+change. 2 new tests (a 0.3-confidence box accepted as a continuity match; the same box rejected
+for fresh acquisition, confirming the lower floor doesn't leak into that path). `npm run
+typecheck` → zero errors, `npm test` → 112/112.
+
+**Occlusion fix, NOT applied — flagged as the higher-leverage next step**: switching
+`useAthleteDetection.ts`'s resizer `scaleMode` from `'stretch'` to `'contain'`. The research
+(reading the resizer's own `.d.ts` directly) confirmed `'stretch'` squashes/stretches each axis
+independently to fill the model's square 300×300 input — which further distorts the
+already-atypical aspect ratio of a partially-visible/truncated body, on top of SSD-MobileNet-V1's
+architecturally-known weakness on small/partial objects. `'contain'` (letterboxing) would remove
+that compounding distortion. Deliberately NOT implemented in this pass: it requires new
+letterbox-offset math in the exact box-coordinate pipeline that has already shipped two broken
+coordinate bugs this project (front-camera mirroring, then back-camera rotation) — this needs its
+own careful derivation and dedicated test pass, not to be bundled in under the same time pressure
+as everything else in this entry. A model swap to EfficientDet-Lite0 (25.69% vs ~21% COCO mAP per
+TF's own Pixel-4 benchmark table, similar latency class) is a further, bigger, unimplemented
+option if the above two aren't enough — explicitly do NOT swap to plain SSD-MobileNetV2, TF's own
+numbers show it scoring *lower* mAP than V1 at this input size.
+
+**What none of this proves**: whether the BLE timeout fix actually gets the phone to `'connected'`
+— untested on real hardware as of this entry, and the "stale bond" hypothesis, if correct, means
+the timeout fix alone might not be sufficient without the user also doing the iOS
+"Forget This Device" step. Whether the occlusion confidence-floor change measurably helps on real
+occluded footage is also untested — it's a precedented, low-risk mechanism, not a proven result.

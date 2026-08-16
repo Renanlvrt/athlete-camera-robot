@@ -15,6 +15,7 @@ and `docs/PRD.md` §5), or camera setup (that's `src/hooks/useCameraSetup.ts`).
 | `person-detection-model-asset.md` | file | The concrete downloadable `.tflite` file URL, its output tensor format, and the person class index | ✅ verified |
 | `detection-range-bench-finding.md` | file | Laptop-webcam bench measurement of detection range/confidence vs. distance — bounds but does not replace the required field test | ✅ verified (as a bench finding; explicitly NOT a substitute for `docs/PRD.md` §7's field test) |
 | `frame-budget.md` | file | What "fast enough" means here and how it's measured | ⚠️ needs verification (budget is arithmetic; real numbers need the device) |
+| `occlusion-robustness.md` | file | Why the bundled SSD-MobileNet-V1 struggles on partially-occluded/truncated athletes, and ranked app-level + model-swap fixes | ⚠️ needs verification (literature/reasoning only — no occlusion-specific AP number found for this exact model, and no fix has been implemented or field-tested yet) |
 
 ## Depends on
 `../phone-integration/expo-cng-constraints.md` — the no-Mac constraint is what eliminates most

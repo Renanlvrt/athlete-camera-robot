@@ -185,6 +185,32 @@ describe('selectPrimaryAthlete', () => {
       expect(result).toEqual({ status: 'no-athletes' });
     });
 
+    it('accepts a continuity match below MIN_CONFIDENCE but above CONTINUITY_MIN_CONFIDENCE (ByteTrack-style)', () => {
+      // Confidence 0.3 would fail fresh acquisition's MIN_CONFIDENCE (0.4)
+      // but should still continue an existing lock — this is exactly the
+      // "occluded athlete's box confidence dipped, but it's still right
+      // where the lock was" case.
+      const previousLock = box({ x: 0.4, y: 0.4, width: 0.2, height: 0.2 });
+      const dippedButSameSpot = box({
+        x: 0.41,
+        y: 0.41,
+        width: 0.2,
+        height: 0.2,
+        confidence: 0.3,
+      });
+
+      const result = selectPrimaryAthlete([dippedButSameSpot], previousLock);
+
+      expect(result).toEqual({ status: 'locked', athlete: dippedButSameSpot, index: 0 });
+    });
+
+    it('does NOT lower the confidence floor for fresh acquisition', () => {
+      // Same confidence (0.3) as the test above, but with no previousLock —
+      // fresh acquisition must still use the stricter MIN_CONFIDENCE.
+      const result = selectPrimaryAthlete([box({ confidence: 0.3 })]);
+      expect(result).toEqual({ status: 'no-athletes' });
+    });
+
     it('is unaffected by continuity when previousLock is omitted (existing callers unchanged)', () => {
       const a = box({ width: 0.1, height: 0.1 });
       const b = box({ width: 0.5, height: 0.5 });

@@ -265,6 +265,25 @@ disagrees.)*
   answer the question. The field test is still required.
 - **Power/brownout behaviour** under real servo load. Explicitly *not* resolvable by research;
   see `research/hardware/power-brownout-risk.md` and the `servo-bounds-test` skill.
+- **Detection accuracy under partial occlusion** (legs cut off, only part of the body visible) —
+  reported weak 2026-08-16. Researched in `research/computer-vision/occlusion-robustness.md`
+  (medium confidence overall — the architectural reasoning is well-sourced, the exact magnitude
+  for this specific 2018 model is not measurable from documents). One fix implemented same day:
+  `selectPrimaryAthlete.ts`'s continuity match now accepts a lower confidence floor
+  (`CONTINUITY_MIN_CONFIDENCE` = 0.25 vs fresh-acquisition's 0.4) for boxes that spatially match
+  the existing lock — the ByteTrack pattern, ONLY helps once something is already locked, doesn't
+  touch the model's own raw output quality. **NOT yet implemented, flagged as the higher-leverage
+  next step**: switching `useAthleteDetection.ts`'s resizer `scaleMode` from `'stretch'` to
+  `'contain'` — stretch currently distorts exactly the atypical aspect ratios a
+  truncated/partially-visible body already has, and the resizer library supports letterboxing
+  directly. Deliberately not implemented in the same pass as the confidence-floor fix: it
+  requires new letterbox-offset math in the box-coordinate pipeline, which is the exact same
+  fragile code path that has already shipped two broken coordinate bugs this project (mirroring,
+  then back-camera rotation) — worth doing carefully, with its own dedicated test pass, not
+  bundled in under time pressure. A model swap to EfficientDet-Lite0 (25.69% vs ~21% COCO mAP per
+  TF's own benchmark table) is a further, bigger option if the above two aren't enough — do NOT
+  swap to plain SSD-MobileNetV2, TF's own numbers show it scoring *lower* than V1 at this input
+  size.
 
 ### Closed since the last review
 - ~~Which on-device person-detection model/library~~ → **`react-native-fast-tflite`** with a

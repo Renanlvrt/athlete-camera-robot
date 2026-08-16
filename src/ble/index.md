@@ -23,6 +23,22 @@ Treat the protocol as hardware-confirmed (via the standalone bench script) and t
 integration as **actively broken or unconfirmed, not merely untested** — first real signal was
 negative, not absent.
 
+**2026-08-16 update:** a THIRD real-phone symptom — stuck at `'connecting'` forever, never
+reaching `'connected'` OR `'error'` — root-caused via a 3-way parallel research push (see
+`research/hardware/react-native-ble-plx-ios-connect-api.md`,
+`research/hardware/ios-ble-connect-hang.md`, `research/hardware/ios-ble-pairing-mismatch.md`):
+`connectToDevice` was being called with no `timeout`, and unlike Android, iOS's CoreBluetooth has
+no OS-level connect timeout of its own — confirmed against the real upstream native source
+(`MultiPlatformBleAdapter`'s `BleModule.swift`, fetched directly since it's a CocoaPod dependency
+not present in this repo's `node_modules`). Fixed by passing `{ timeout: CONNECT_TIMEOUT_MS }`
+(15s) — see that constant's own doc comment. This makes a stalled attempt surface as a visible,
+retryable `'error'` instead of hanging silently, but does NOT by itself explain why CoreBluetooth
+stalls in the first place — the leading suspect for that (medium confidence) is a stale iOS
+Bluetooth bond left over from this exact micro:bit's earlier MicroPython-firmware life (same
+hardware Bluetooth address survives reflashing); if the timeout fix alone doesn't reach
+`'connected'`, the next thing to try is iOS Settings > Bluetooth > "Forget This Device" for the
+micro:bit, then retry. Not yet confirmed on the real phone as of this entry.
+
 ## Contents
 
 | Name | Type | Responsibility (one line) | Status |
@@ -31,7 +47,7 @@ negative, not absent.
 | `base64.test.ts` | file | Empty input, 12 byte-length cases matched against `Buffer.toString('base64')`, exact padding shape for a 4-byte packet, purity | ✅ verified |
 | `encodeGimbalPacket.ts` | file | `GimbalCorrection` (degrees) → the fixed 4-byte wire packet (two big-endian signed int16 deltas, tenths of a degree) | ✅ verified — 8 tests |
 | `encodeGimbalPacket.test.ts` | file | Length, round-trip via independent `DataView` decode (positive/negative/mixed), NaN/Infinity → 0, extreme-value clamping, purity | ✅ verified |
-| `useBleConnection.ts` | file | Owns a `BleManager`, scans broadly and matches by service UUID OR advertised name (`"BBC micro:bit"` prefix — added 2026-08-15, a UUID-only filter isn't reliably enough on its own), connects, discovers characteristics, exposes `state` and a fire-and-forget `send(correction)` that writes to the hardware-confirmed RX characteristic (`6E400003`). Auto-reconnects (flat 3s retry) after any unexpected drop, plus a manual `retry()` that tears down and restarts the whole cycle — `retry()` explicitly awaits the old device's `cancelDeviceConnection` before starting a new attempt (fixed 2026-08-15 same day, see below). | ⚠️ needs verification — **two real attempts, two real failures found and fixed, still not confirmed working end to end**: first attempt reached `'error'` with no detail (fixed by showing `state.error.message` + adding tap-to-retry); using that retry, a second real report showed the badge stuck on `'connected'` while nothing actually worked — traced to `retry()` racing a new `connectToDevice` against the old connection's not-yet-finished teardown, now fixed by awaiting the teardown first. Neither fix has been re-tested on the phone yet. Do not treat this hook as working until a report comes back `'connected'` **and stays accurate** through at least one disconnect/reconnect cycle. |
+| `useBleConnection.ts` | file | Owns a `BleManager`, scans broadly and matches by service UUID OR advertised name (`"BBC micro:bit"` prefix — added 2026-08-15, a UUID-only filter isn't reliably enough on its own), connects (with an explicit `CONNECT_TIMEOUT_MS` = 15s, added 2026-08-16 — see below), discovers characteristics, exposes `state` and a fire-and-forget `send(correction)` that writes to the hardware-confirmed RX characteristic (`6E400003`). Auto-reconnects (flat 3s retry) after any unexpected drop, plus a manual `retry()` that tears down and restarts the whole cycle — `retry()` explicitly awaits the old device's `cancelDeviceConnection` before starting a new attempt (fixed 2026-08-15 same day, see below). | ⚠️ needs verification — **three real attempts, three real failures found and fixed, still not confirmed working end to end**: attempt 1 reached `'error'` with no detail (fixed by showing `state.error.message` + adding tap-to-retry); attempt 2 showed the badge stuck on `'connected'` while nothing actually worked (traced to `retry()` racing a new `connectToDevice` against the old connection's not-yet-finished teardown, fixed by awaiting the teardown first); attempt 3 (2026-08-16) got stuck at `'connecting'` forever with no error at all (traced to a missing `timeout` — iOS's CoreBluetooth has no connect timeout of its own, fixed by supplying one). None of the three fixes has been re-confirmed on the phone yet. Do not treat this hook as working until a report comes back `'connected'` **and stays accurate** through at least one disconnect/reconnect cycle. |
 
 ## Design decisions worth knowing
 
@@ -76,8 +92,8 @@ negative, not absent.
 types), `../tracking/types.ts` (`GimbalCorrection`).
 
 ## Depended on by
-`src/hooks/useGimbalControl.ts` — the control-loop hook that calls `selectPrimaryAthlete` +
-`computeGimbalCorrection` + this folder's `send()`, rate-limited to ~15Hz, and passes `retry`
-straight through as `retryBle`. Wired into `src/App.tsx` (called unconditionally alongside the
-other hooks) and surfaced to the user via `src/screens/BleStatusBadge.tsx`, which calls `retry`
-when tapped.
+`src/hooks/useGimbalControl.ts` — the control-loop hook that takes the already-locked athlete
+(from `src/hooks/useLockedAthlete.ts`) and calls `computeGimbalCorrection` + this folder's
+`send()`, rate-limited to ~15Hz, and passes `retry` straight through as `retryBle`. Wired into
+`src/App.tsx` (called unconditionally alongside the other hooks) and surfaced to the user via
+`src/screens/BleStatusBadge.tsx`, which calls `retry` when tapped.
