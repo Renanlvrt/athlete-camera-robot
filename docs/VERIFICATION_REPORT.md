@@ -892,3 +892,40 @@ wires and edge-connector access. A one-time scheduled reminder was created for t
 (`trig_01QxHH6TVcvbZoXSEg7JRKdq`). Not a blocker for current CV/BLE work — the user is not
 connecting servos/motors yet, and a plain USB wall charger has no auto-shutoff issue at all for
 continued bench testing in the meantime.
+
+## 2026-08-16 — Real report: the shipped back-camera box-rotation fix did NOT work; root cause found and fixed
+
+Human-reported, explicit and unambiguous: "This did not work for sure" — the fix recorded in the
+2026-08-14 entry above (added an `orientation` option and `orientBox()` rotation math to
+`src/tracking/decodeDetections.ts`) was installed and re-tested on the real phone, and the back
+camera's box was still wrong.
+
+Root-caused this time from an unambiguous source rather than re-deriving the rotation math from
+scratch again (the same approach that produced the first, broken fix). `CameraOrientation`'s own
+doc comment describes `'right'`/`'left'` as "+90°"/"-90°" relative to upright, but doesn't say
+which physical direction "+" means, and that ambiguity is exactly the trap: read instead from
+`node_modules/react-native-vision-camera/ios/Extensions/Converters/CG+CameraOrientation.swift`'s
+`toCGOrientation()`, which maps `CameraOrientation.right` -> `CGImagePropertyOrientation.right`
+and `.left` -> `.left`; cross-checked against
+`.../ios/Extensions/UIImageOrientation+exif.swift`, which maps those directly to the formal EXIF
+orientation tag values 6 and 8. EXIF tag semantics are a fixed international spec (which row/
+column of the raw buffer becomes which edge of the correctly-oriented image) — not open to
+CW/CCW interpretation. Working through that spec for tags 6 and 8 by hand shows the box-rotation
+formulas previously shipped under `case 'right'` and `case 'left'` in `orientBox()` were swapped
+with each other: the body that should run for `'right'` was running for `'left'`, and vice versa.
+A left/right swap produces a box wrong on both axes at once — exactly the reported symptom, both
+times — and explains why the front camera was unaffected: it apparently reports `'up'`/`'down'`
+(identity and 180°, both direction-symmetric), so the swap never had a chance to show up there.
+
+**Fixed**: `orientBox()`'s `'right'` and `'left'` case bodies swapped to match the EXIF-tag-
+derived math (documented inline in the function's own doc comment, with the full derivation, so
+the next person doesn't have to re-derive it under pressure either). `decodeDetections.test.ts`'s
+`'right'`/`'left'` expected values swapped to match. `npm run typecheck` → zero errors, `npm test`
+→ 103/103 passing (same 7 suites, same counts — this only changed which numbers two existing
+tests expect, not what's tested).
+
+**What this does NOT prove**: whether this is actually correct on the real phone — untested there
+as of this entry. The previous fix also passed its own tests and still failed on hardware, so
+test-suite passing is evidence the *internal logic* is self-consistent with the EXIF-derived
+model, not proof the model itself matches real iOS back-camera behaviour. This needs a real
+on-device back-camera test before it can be marked more than `⚠️ needs verification`.

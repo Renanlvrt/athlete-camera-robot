@@ -200,24 +200,24 @@ describe('decodeDetections', () => {
       expect(result?.height).toBeCloseTo(0.5);
     });
 
-    it('rotates -90° (CCW) for orientation "right", swapping width/height', () => {
+    it('rotates for orientation "right" (EXIF tag 6), swapping width/height', () => {
       const { boxes, classes, scores } = detectionSet([
         { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
       ]);
       const result = decodeDetections(boxes, classes, scores, { orientation: 'right' })[0];
-      expect(result?.x).toBeCloseTo(0);
-      expect(result?.y).toBeCloseTo(0.7);
+      expect(result?.x).toBeCloseTo(0.5);
+      expect(result?.y).toBeCloseTo(0);
       expect(result?.width).toBeCloseTo(0.5);
       expect(result?.height).toBeCloseTo(0.3);
     });
 
-    it('rotates +90° (CW) for orientation "left", swapping width/height', () => {
+    it('rotates for orientation "left" (EXIF tag 8), swapping width/height', () => {
       const { boxes, classes, scores } = detectionSet([
         { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
       ]);
       const result = decodeDetections(boxes, classes, scores, { orientation: 'left' })[0];
-      expect(result?.x).toBeCloseTo(0.5);
-      expect(result?.y).toBeCloseTo(0);
+      expect(result?.x).toBeCloseTo(0);
+      expect(result?.y).toBeCloseTo(0.7);
       expect(result?.width).toBeCloseTo(0.5);
       expect(result?.height).toBeCloseTo(0.3);
     });
@@ -236,13 +236,13 @@ describe('decodeDetections', () => {
       const { boxes, classes, scores } = detectionSet([
         { slot: 0, classId: PERSON_CLASS_ID, score: 0.9, box: cornerBox },
       ]);
-      // Rotate 'right' alone: x=0, width=0.5 -> mirrored: x = 1 - 0 - 0.5 = 0.5
+      // Rotate 'right' alone: x=0.5, width=0.5 -> mirrored: x = 1 - 0.5 - 0.5 = 0
       const result = decodeDetections(boxes, classes, scores, {
         orientation: 'right',
         isMirrored: true,
       })[0];
-      expect(result?.x).toBeCloseTo(0.5);
-      expect(result?.y).toBeCloseTo(0.7);
+      expect(result?.x).toBeCloseTo(0);
+      expect(result?.y).toBeCloseTo(0);
       expect(result?.width).toBeCloseTo(0.5);
       expect(result?.height).toBeCloseTo(0.3);
     });

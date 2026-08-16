@@ -25,11 +25,15 @@ sending bytes to the robot (future `src/ble/`), or drawing anything (`src/screen
 | `computeTrackingReadout.test.ts` | file | 12 tests: bearing convention in all 4 directions, buffer boundary, NaN/Infinity, purity | ✅ verified |
 | `decodeDetections.test.ts` | file | 23 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity, `isMirrored` flip on both sides of the frame, and all 4 `orientation` cases (identity, 180°, ±90° with dimension swap, rotation-then-mirror composition, post-rotation degenerate box) | ✅ verified |
 
-**Verified how:** `npm test` → 63/63 passing across this folder (80/80 repo-wide);
+**Verified how:** `npm test` → 63/63 passing across this folder (103/103 repo-wide);
 `npm run typecheck` → zero errors. Recorded in `docs/VERIFICATION_REPORT.md`. Note these tags
 cover the *logic*; the tuning **constants** and `PERSON_CLASS_ID`/tensor-order assumptions behind
 `decodeDetections.ts` are unvalidated against the real model running on real hardware until a
-field test (see below).
+field test (see below). The `orientation`/`orientBox()` rotation math specifically has already
+shipped once believing itself correct (tests passing, EXIF-derived reasoning) and still failed a
+real back-camera phone test — see `docs/VERIFICATION_REPORT.md`'s 2026-08-16 entry. Treat it as
+`⚠️ needs verification` in practice for real-hardware correctness, tests-passing notwithstanding,
+until a fresh phone report confirms the current (`'left'`/`'right'` swap fixed) version.
 
 ## Design decisions worth knowing
 

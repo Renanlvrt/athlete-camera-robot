@@ -72,13 +72,17 @@ export interface DecodeDetectionsOptions {
    * is a separate camera-facing fact, and composing them in the wrong order
    * would only happen to look right when one of the two is a no-op.
    *
-   * Real on-device report, 2026-08-14: back camera showed a box wrong on
-   * BOTH axes (side and up/down) while front camera was correct — exactly
-   * the signature of an uncorrected 180°/`'down'` orientation on the back
-   * sensor while the front sensor reports `'up'`. This option (and the
-   * rotation math below) is the fix; before this it only corrected the
-   * frame's aspect ratio for a 90° case, never the box's own position, and
-   * never handled 180° at all.
+   * Real on-device reports:
+   * - 2026-08-14: back camera showed a box wrong on BOTH axes (side and
+   *   up/down) while front camera was correct. First fix attempt added this
+   *   option and the rotation math, but got the `'left'`/`'right'` formula
+   *   bodies swapped with each other (see `orientBox`'s doc comment for the
+   *   corrected, EXIF-spec-derived math) — still wrong on both axes when
+   *   re-tested, because a left/right swap looks exactly like the original
+   *   symptom (front camera apparently hits `'up'`/`'down'`, both
+   *   direction-symmetric, so the swap never showed up there).
+   * - 2026-08-15/16: swap fixed in `orientBox`, not yet re-confirmed on a
+   *   real phone — see `testing/REAL_HARDWARE_TEST_LOG.md`.
    */
   readonly orientation?: BufferOrientation;
   /**
@@ -98,11 +102,29 @@ export interface DecodeDetectionsOptions {
 /**
  * Rotate a raw-buffer-space box to upright ("up") space.
  *
- * Derived directly from `CameraOrientation`'s documented semantics (see the
- * type above) by tracking where each of a box's 4 corners lands under the
- * inverse rotation, then taking min/max — not by guessing a formula. Every
- * case has a dedicated test in `decodeDetections.test.ts` using a simple
- * corner-hugging box, which is the easiest shape to reason about by hand.
+ * The `'left'`/`'right'` cases here were previously SWAPPED (shipped, and
+ * confirmed broken on a real back-camera phone test on 2026-08-14/15 — see
+ * `testing/REAL_HARDWARE_TEST_LOG.md`). The direction of "+90°"/"-90°" in
+ * `CameraOrientation`'s own doc comment is ambiguous prose (clockwise as
+ * seen from where?), so re-derive it from something unambiguous instead:
+ * VisionCamera's own iOS native code
+ * (`node_modules/react-native-vision-camera/ios/Extensions/Converters/CG+CameraOrientation.swift`,
+ * `toCGOrientation()`) maps `CameraOrientation.right` -> EXIF orientation
+ * tag 6 and `CameraOrientation.left` -> EXIF tag 8 (cross-checked against
+ * `UIImageOrientation+exif.swift`'s `case 6: .right` / `case 8: .left`).
+ * EXIF tag values have a fixed, formal spec (which row/column of the raw
+ * buffer becomes which edge of the correctly-oriented image), independent
+ * of any CW/CCW wording:
+ *   - tag 6 (`'right'`): raw row 0 (top) -> display's RIGHT edge; raw
+ *     column 0 (left) -> display's TOP edge. That fixes the whole mapping:
+ *     display x = 1 - raw_y, display y = raw_x.
+ *   - tag 8 (`'left'`): raw row 0 (top) -> display's LEFT edge; raw
+ *     column 0 (left) -> display's BOTTOM edge: display x = raw_y,
+ *     display y = 1 - raw_x.
+ * Applying those to all 4 corners of a box and taking min/max gives the
+ * formulas below. Every case has a dedicated test in
+ * `decodeDetections.test.ts` using a simple corner-hugging box, which is
+ * the easiest shape to reason about by hand.
  */
 function orientBox(
   xmin: number,
@@ -115,14 +137,15 @@ function orientBox(
     case 'up':
       return { xmin, ymin, xmax, ymax };
     case 'down':
-      // 180°: point reflection through the center.
+      // 180°: point reflection through the center. Direction-agnostic, so
+      // this case was never affected by the left/right swap.
       return { xmin: 1 - xmax, ymin: 1 - ymax, xmax: 1 - xmin, ymax: 1 - ymin };
     case 'right':
-      // Buffer is +90° relative to upright; undo by rotating -90° (CCW).
-      return { xmin: ymin, ymin: 1 - xmax, xmax: ymax, ymax: 1 - xmin };
-    case 'left':
-      // Buffer is -90° relative to upright; undo by rotating +90° (CW).
+      // EXIF tag 6: display x = 1 - raw_y, display y = raw_x.
       return { xmin: 1 - ymax, ymin: xmin, xmax: 1 - ymin, ymax: xmax };
+    case 'left':
+      // EXIF tag 8: display x = raw_y, display y = 1 - raw_x.
+      return { xmin: ymin, ymin: 1 - xmax, xmax: ymax, ymax: 1 - xmin };
   }
 }
 
