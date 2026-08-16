@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 12 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 15 times |
 
-## Status: ✅ verified green, 14/14 runs, most recently 2026-08-15/16 (BLE retry-race fix)
+## Status: ✅ verified green, 15/15 runs, most recently 2026-08-16 (back-camera rotation re-fix)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -66,12 +66,18 @@ same run.
   starting a new connection attempt, closing the race that caused it; the same class of bug was
   also fixed in the Python sandbox's `BleSender`, which now polls `client.is_connected` instead
   of inferring connection state from write success/failure): success in 9m11s, auto-triggered.
-  **This is the build to install next.**
+- Run `31962301870` (commit `13d020a` — back-camera box-rotation RE-fix: the 2026-08-14 fix's
+  `orientBox()` had its `'left'`/`'right'` case formulas swapped with each other, confirmed
+  broken on a real phone; re-derived from VisionCamera's iOS `CameraOrientation`->EXIF-tag
+  mapping and corrected): success, auto-triggered by the push. Artifact still 14.3 MB (pure
+  JS-side math change in `src/tracking/`, no native surface touched). **This is the build to
+  install next** — see `docs/VERIFICATION_REPORT.md`'s 2026-08-16 "did NOT work" entry for what
+  changed and why it still needs a real back-camera phone test before being trusted.
 
-All fourteen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
+All fifteen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
 valid zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable
 present, `Info.plist` is a parseable Apple binary property list. **First attempt succeeded on
-all fourteen runs** — none of the "likely first failures" predicted below have occurred yet.
+all fifteen runs** — none of the "likely first failures" predicted below have occurred yet.
 Full detail in `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical
