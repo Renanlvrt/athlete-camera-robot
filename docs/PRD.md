@@ -242,8 +242,21 @@ disagrees.)*
 - **Logic for *which* athlete becomes the "locked" one** when several are visible. §4.2 says keep
   this loose for MVP; start with largest bounding-box area. **Partially bench-tested 2026-08-13**
   (`docs/VERIFICATION_REPORT.md`): the largest-box heuristic correctly locked onto the
-  closer/larger of two people in two static arrangements. Still open: rapid switching under live
-  dynamic movement (both people actively moving) was not tested.
+  closer/larger of two people in two static arrangements. A real report (2026-08-16) that
+  multi-athlete selection "seems all random" led to adding continuity matching (2026-08-16,
+  `src/tracking/selectPrimaryAthlete.ts` + `src/hooks/useLockedAthlete.ts`, explicitly requested
+  in that conversation despite this being adjacent to the "refined multi-athlete selection"
+  FUTURE item below — see those files' doc comments for the mechanism): the largest-box heuristic
+  is now only used to acquire/re-acquire a lock, not to re-decide it every frame, which should
+  fix the "random"-looking flips between similarly-sized athletes and improve holding the lock
+  through brief occlusion. Unit-tested; **not yet confirmed on a real phone with real moving
+  athletes** — that confirmation is still open, now against this new logic rather than the
+  original one. "Follow the person with the ball" (also requested 2026-08-16) is a separate,
+  larger, NOT-yet-built idea — the bundled model can technically detect a "sports ball" (it's
+  full COCO, just filtered to `PERSON_CLASS_ID` today), but ball detection reliability at typical
+  filming distance with this small quantized model, and the box-to-person association logic, are
+  both unresearched; scope this as its own follow-up rather than assuming it falls out of the
+  continuity-lock work above.
 - **Whether detection range is adequate** for a distant athlete with a small quantized model.
   This is the most likely thing to force a rethink of §4.1, and it can only be answered by a
   field test — not by research. **Bench-bounded, not closed, 2026-08-13**: a laptop-webcam test

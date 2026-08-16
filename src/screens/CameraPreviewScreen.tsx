@@ -11,7 +11,7 @@ import type { CameraFacing } from '../hooks/useCameraSetup';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
 import type { RecordingStatus, SaveStatus } from '../hooks/useVideoRecording';
 import type { BleConnectionState } from '../ble/useBleConnection';
-import type { PersonBox } from '../tracking/types';
+import type { PrimaryAthleteResult } from '../tracking/types';
 import { CameraControls } from './CameraControls';
 import { TrackingOverlay } from './TrackingOverlay';
 import { BleStatusBadge } from './BleStatusBadge';
@@ -19,7 +19,7 @@ import { BleStatusBadge } from './BleStatusBadge';
 interface CameraPreviewScreenProps {
   readonly device: CameraDevice;
   readonly frameOutput: CameraFrameOutput;
-  readonly boxes: readonly PersonBox[];
+  readonly primary: PrimaryAthleteResult;
   readonly frameAspectRatio: number | undefined;
   readonly detectionStatus: DetectionStatus;
   readonly facing: CameraFacing;
@@ -49,7 +49,7 @@ interface CameraPreviewScreenProps {
 export function CameraPreviewScreen({
   device,
   frameOutput,
-  boxes,
+  primary,
   frameAspectRatio,
   detectionStatus,
   facing,
@@ -70,7 +70,7 @@ export function CameraPreviewScreen({
         isActive={true}
         outputs={[frameOutput, videoOutput]}
       />
-      <TrackingOverlay boxes={boxes} frameAspectRatio={frameAspectRatio} status={detectionStatus} />
+      <TrackingOverlay primary={primary} frameAspectRatio={frameAspectRatio} status={detectionStatus} />
       <BleStatusBadge state={bleState} onRetry={onRetryBle} />
       <CameraControls
         facing={facing}

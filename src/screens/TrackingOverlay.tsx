@@ -3,13 +3,19 @@ import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 
 import { colors } from '../theme/colors';
 import { computeTrackingReadout } from '../tracking/computeTrackingReadout';
-import { selectPrimaryAthlete } from '../tracking/selectPrimaryAthlete';
-import type { PersonBox } from '../tracking/types';
+import type { PrimaryAthleteResult } from '../tracking/types';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
 import { clampBadgePosition, computeLineStyle, mapFrameBoxToViewRect } from './frameLayout';
 
 interface TrackingOverlayProps {
-  readonly boxes: readonly PersonBox[];
+  /**
+   * Which athlete is locked, already decided upstream by
+   * `src/hooks/useLockedAthlete.ts` — this component no longer calls
+   * `selectPrimaryAthlete` itself (2026-08-16), so it always agrees with
+   * whatever `useGimbalControl.ts` is actually sending to the robot instead
+   * of possibly picking a different athlete from the same frame's boxes.
+   */
+  readonly primary: PrimaryAthleteResult;
   readonly frameAspectRatio: number | undefined;
   readonly status: DetectionStatus;
 }
@@ -35,7 +41,7 @@ function compassLabel(angleDegrees: number): string {
  * `src/screens/index.md`'s "Rule for growing this folder".
  */
 export function TrackingOverlay({
-  boxes,
+  primary,
   frameAspectRatio,
   status,
 }: TrackingOverlayProps): React.ReactElement {
@@ -46,7 +52,6 @@ export function TrackingOverlay({
     setViewSize({ width, height });
   };
 
-  const primary = selectPrimaryAthlete(boxes);
   const readout =
     primary.status === 'locked' ? computeTrackingReadout(primary.athlete) : undefined;
   const statusColor = readout?.isCentered ? colors.locked : colors.tracking;

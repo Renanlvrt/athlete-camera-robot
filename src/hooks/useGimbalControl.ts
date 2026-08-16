@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
 
-import { selectPrimaryAthlete } from '../tracking/selectPrimaryAthlete';
 import { computeGimbalCorrection } from '../tracking/computeGimbalCorrection';
 import { defaultGimbalTuning, type GimbalTuning } from '../tracking/types';
-import type { PersonBox } from '../tracking/types';
+import type { PrimaryAthleteResult } from '../tracking/types';
 import { useBleConnection, type BleConnectionState } from '../ble/useBleConnection';
 
 /**
@@ -12,7 +11,16 @@ import { useBleConnection, type BleConnectionState } from '../ble/useBleConnecti
  * Single responsibility: the actual control loop. Ties together, in order,
  * what `src/tracking/` and `src/ble/` each already do in isolation:
  *
- *   detected boxes → selectPrimaryAthlete → computeGimbalCorrection → BLE send
+ *   locked athlete → computeGimbalCorrection → BLE send
+ *
+ * Takes the already-resolved `PrimaryAthleteResult` from
+ * `src/hooks/useLockedAthlete.ts` rather than raw `boxes` and re-deciding who
+ * to follow itself (2026-08-16) — it used to call `selectPrimaryAthlete`
+ * independently of `TrackingOverlay.tsx`'s own separate call on the same
+ * frame's boxes, which meant the two could disagree about who was locked.
+ * There is now exactly one call to `selectPrimaryAthlete`
+ * (`useLockedAthlete.ts`), and this hook and the overlay both consume its
+ * output — see `src/App.tsx`.
  *
  * Owns exactly one piece of NEW logic that doesn't belong in either of those
  * pure folders: RATE-LIMITING. PRD §7 / `research/hardware/microbit-ble-link.md`
@@ -27,10 +35,10 @@ import { useBleConnection, type BleConnectionState } from '../ble/useBleConnecti
  *
  * UNVERIFIED ON HARDWARE, same as `src/ble/`: the rate-limit guard has no
  * dedicated unit test because it's driven by `Date.now()` and a React effect
- * — the underlying decisions it composes (`selectPrimaryAthlete`,
- * `computeGimbalCorrection`) are already independently unit-tested in
- * `src/tracking/`. What's untested here is the composition + timing itself,
- * which needs a real device to observe meaningfully.
+ * — the underlying decision it applies (`computeGimbalCorrection`) is already
+ * independently unit-tested in `src/tracking/`. What's untested here is the
+ * composition + timing itself, which needs a real device to observe
+ * meaningfully.
  */
 
 const SEND_INTERVAL_MS = 1000 / 15;
@@ -43,7 +51,7 @@ export interface GimbalControlResult {
 }
 
 export function useGimbalControl(
-  boxes: readonly PersonBox[],
+  primary: PrimaryAthleteResult,
   tuning: GimbalTuning = defaultGimbalTuning,
 ): GimbalControlResult {
   const { state, send, retry } = useBleConnection();
@@ -51,16 +59,14 @@ export function useGimbalControl(
 
   useEffect(() => {
     if (state.status !== 'connected') return;
+    if (primary.status !== 'locked') return;
 
     const now = Date.now();
     if (now - lastSentAtRef.current < SEND_INTERVAL_MS) return;
 
-    const primary = selectPrimaryAthlete(boxes);
-    if (primary.status !== 'locked') return;
-
     send(computeGimbalCorrection(primary.athlete, tuning));
     lastSentAtRef.current = now;
-  }, [boxes, state.status, tuning, send]);
+  }, [primary, state.status, tuning, send]);
 
   return { bleState: state, retryBle: retry };
 }

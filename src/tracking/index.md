@@ -16,16 +16,16 @@ sending bytes to the robot (future `src/ble/`), or drawing anything (`src/screen
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
 | `types.ts` | file | Shared vocabulary: `PersonBox`, `GimbalCorrection`, `GimbalTuning`, tuning defaults | ✅ verified |
-| `selectPrimaryAthlete.ts` | file | Every detection → the one athlete to lock onto | ✅ verified |
+| `selectPrimaryAthlete.ts` | file | Every detection → the one athlete to lock onto. Takes an optional `previousLock` (2026-08-16, new) — if given, prefers whichever current box continuity-matches it (by IoU, with center-distance as a fallback for boxes shrunk by occlusion) over the largest-area heuristic, which is now only used to (re)acquire a lock. State (remembering what the previous lock was, and for how long) is NOT here — see `src/hooks/useLockedAthlete.ts`. | ✅ verified |
 | `computeGimbalCorrection.ts` | file | Locked athlete's offset → roll/pitch deltas (proportional, clamped) | ✅ verified |
 | `computeTrackingReadout.ts` | file | Locked athlete's offset → human-readable distance/bearing + `isCentered`, for the on-screen UI | ✅ verified |
 | `decodeDetections.ts` | file | Raw SSD-MobileNet-V1 output tensors → `PersonBox[]`, filtered to the person class, with an `orientation` option that rotates the box into upright space (for a non-`'up'` `Frame.orientation`) applied BEFORE an `isMirrored` option that un-mirrors `x` for front-camera frames | ✅ verified |
-| `selectPrimaryAthlete.test.ts` | file | 12 tests: confidence gating, largest-area, tie determinism, purity | ✅ verified |
+| `selectPrimaryAthlete.test.ts` | file | 17 tests: confidence gating, largest-area, tie determinism, purity, and (2026-08-16) 7 continuity-matching tests — keeps following the previous lock over a now-larger box, IoU match on slight movement, center-distance match on an occlusion-shrunk box, fallback to largest-area when nothing continues, fallback to `no-athletes`, low-confidence continuity candidates still rejected, and unaffected behaviour when `previousLock` is omitted | ✅ verified |
 | `computeGimbalCorrection.test.ts` | file | 16 tests: sign convention, proportionality, deadband, step cap, NaN, convergence | ✅ verified |
 | `computeTrackingReadout.test.ts` | file | 12 tests: bearing convention in all 4 directions, buffer boundary, NaN/Infinity, purity | ✅ verified |
 | `decodeDetections.test.ts` | file | 23 tests: class/score filtering, multi-detection ordering, degenerate/inverted/NaN boxes, slot bound, purity, `isMirrored` flip on both sides of the frame, and all 4 `orientation` cases (identity, 180°, ±90° with dimension swap, rotation-then-mirror composition, post-rotation degenerate box) | ✅ verified |
 
-**Verified how:** `npm test` → 63/63 passing across this folder (103/103 repo-wide);
+**Verified how:** `npm test` → 68/68 passing across this folder (110/110 repo-wide);
 `npm run typecheck` → zero errors. Recorded in `docs/VERIFICATION_REPORT.md`. Note these tags
 cover the *logic*; the tuning **constants** and `PERSON_CLASS_ID`/tensor-order assumptions behind
 `decodeDetections.ts` are unvalidated against the real model running on real hardware until a
@@ -62,8 +62,9 @@ watching the real gimbal.
 Nothing. No imports outside this folder — that isolation is what makes it testable.
 
 ## Depended on by
-`src/hooks/useAthleteDetection.ts` (`decodeDetections.ts`), `src/screens/TrackingOverlay.tsx`
-(`selectPrimaryAthlete.ts`, `computeTrackingReadout.ts`). `src/ble/encodeGimbalPacket.ts` takes
-`types.ts`'s `GimbalCorrection` as input. `computeGimbalCorrection.ts` itself isn't called from
-anywhere yet — that's the still-missing control-loop hook that ties detection → selection →
-correction → `src/ble/`'s `send()` together (not yet built).
+`src/hooks/useAthleteDetection.ts` (`decodeDetections.ts`); `src/hooks/useLockedAthlete.ts`
+(`selectPrimaryAthlete.ts`) — the ONLY call site for `selectPrimaryAthlete`, see
+`src/hooks/index.md`; `src/screens/TrackingOverlay.tsx` (`computeTrackingReadout.ts` only, plus
+`PrimaryAthleteResult` from `types.ts` for its prop type); `src/hooks/useGimbalControl.ts`
+(`computeGimbalCorrection.ts`, plus `PrimaryAthleteResult` for its prop type). `src/ble/encodeGimbalPacket.ts`
+takes `types.ts`'s `GimbalCorrection` as input.

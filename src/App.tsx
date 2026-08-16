@@ -1,6 +1,7 @@
 import { useCameraSetup } from './hooks/useCameraSetup';
 import { useAthleteDetection } from './hooks/useAthleteDetection';
 import { useVideoRecording } from './hooks/useVideoRecording';
+import { useLockedAthlete } from './hooks/useLockedAthlete';
 import { useGimbalControl } from './hooks/useGimbalControl';
 import { PermissionRequiredScreen } from './screens/PermissionRequiredScreen';
 import { NoCameraDeviceScreen } from './screens/NoCameraDeviceScreen';
@@ -15,12 +16,12 @@ import { CameraPreviewScreen } from './screens/CameraPreviewScreen';
  * contain camera logic, styling, or permission/detection logic itself —
  * those live in src/hooks/ and src/screens/ respectively.
  *
- * useAthleteDetection(), useVideoRecording(), and useGimbalControl() are
- * called unconditionally (Rules of Hooks) even though their output is only
- * rendered in the 'ready' branch — model loading, frame-output, video-output
- * setup, and the BLE connection attempt don't depend on the camera device
- * being resolved (the robot link can come up before/independently of the
- * camera permission flow).
+ * useAthleteDetection(), useVideoRecording(), useLockedAthlete(), and
+ * useGimbalControl() are called unconditionally (Rules of Hooks) even though
+ * their output is only rendered in the 'ready' branch — model loading,
+ * frame-output, video-output setup, and the BLE connection attempt don't
+ * depend on the camera device being resolved (the robot link can come up
+ * before/independently of the camera permission flow).
  *
  * This is Stage 4 of the implementation plan (live preview + person
  * detection + tracking overlay). See docs/PRD.md §4 for the full roadmap and
@@ -34,7 +35,11 @@ export default function App() {
   const cameraPosition = setup.status === 'ready' ? setup.device.position : setup.facing;
   const detection = useAthleteDetection(cameraPosition);
   const recording = useVideoRecording();
-  const gimbalControl = useGimbalControl(detection.boxes);
+  // Single source of truth for "who's locked" — both the overlay and the
+  // gimbal control loop consume this same result, so they can't disagree.
+  // See useLockedAthlete.ts's doc comment for why that used to happen.
+  const primary = useLockedAthlete(detection.boxes);
+  const gimbalControl = useGimbalControl(primary);
 
   switch (setup.status) {
     case 'requesting-permission':
@@ -46,7 +51,7 @@ export default function App() {
         <CameraPreviewScreen
           device={setup.device}
           frameOutput={detection.frameOutput}
-          boxes={detection.boxes}
+          primary={primary}
           frameAspectRatio={detection.frameAspectRatio}
           detectionStatus={detection.status}
           facing={setup.facing}

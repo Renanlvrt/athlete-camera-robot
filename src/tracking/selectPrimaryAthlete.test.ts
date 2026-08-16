@@ -107,4 +107,88 @@ describe('selectPrimaryAthlete', () => {
       expect(input).toEqual(snapshot);
     });
   });
+
+  describe('continuity (previousLock)', () => {
+    it('keeps following the previously-locked athlete even when another box is now larger', () => {
+      // This is the exact "seems random with multiple athletes" complaint:
+      // without continuity, the larger box would win every time, flipping
+      // the lock back and forth as the two boxes' sizes fluctuate.
+      const followedLastFrame = box({ x: 0.1, y: 0.1, width: 0.2, height: 0.2 });
+      const otherAthlete = box({ x: 0.7, y: 0.1, width: 0.25, height: 0.25 }); // bigger area
+
+      const withoutContinuity = selectPrimaryAthlete([followedLastFrame, otherAthlete]);
+      const withContinuity = selectPrimaryAthlete(
+        [followedLastFrame, otherAthlete],
+        followedLastFrame,
+      );
+
+      expect(withoutContinuity).toEqual({ status: 'locked', athlete: otherAthlete, index: 1 });
+      expect(withContinuity).toEqual({
+        status: 'locked',
+        athlete: followedLastFrame,
+        index: 0,
+      });
+    });
+
+    it('matches a slightly-moved box to the previous lock by IoU', () => {
+      const previousLock = box({ x: 0.4, y: 0.4, width: 0.2, height: 0.2 });
+      const movedSlightly = box({ x: 0.42, y: 0.41, width: 0.2, height: 0.2 });
+      const farAway = box({ x: 0.0, y: 0.0, width: 0.3, height: 0.3 }); // bigger, unrelated
+
+      const result = selectPrimaryAthlete([farAway, movedSlightly], previousLock);
+
+      expect(result).toEqual({ status: 'locked', athlete: movedSlightly, index: 1 });
+    });
+
+    it('matches a box shrunk by occlusion (low IoU) to the previous lock via center distance', () => {
+      // Legs cut off / only part of the body detected: the box shrinks a lot
+      // around roughly the same center. IoU alone could miss this.
+      const previousLock = box({ x: 0.4, y: 0.3, width: 0.2, height: 0.5 }); // full body
+      const occluded = box({ x: 0.45, y: 0.32, width: 0.1, height: 0.15 }); // just a shoulder
+      const differentPersonElsewhere = box({ x: 0.0, y: 0.0, width: 0.3, height: 0.3 });
+
+      const result = selectPrimaryAthlete(
+        [differentPersonElsewhere, occluded],
+        previousLock,
+      );
+
+      expect(result).toEqual({ status: 'locked', athlete: occluded, index: 1 });
+    });
+
+    it('falls back to the largest-box heuristic when nothing continues the previous lock', () => {
+      const previousLock = box({ x: 0.9, y: 0.9, width: 0.05, height: 0.05 }); // left frame
+      const onlyAthleteNow = box({ x: 0.1, y: 0.1, width: 0.2, height: 0.2 });
+
+      const result = selectPrimaryAthlete([onlyAthleteNow], previousLock);
+
+      expect(result).toEqual({ status: 'locked', athlete: onlyAthleteNow, index: 0 });
+    });
+
+    it('falls back to no-athletes when nothing continues the lock and nothing else qualifies', () => {
+      const previousLock = box({ x: 0.9, y: 0.9, width: 0.05, height: 0.05 });
+      const result = selectPrimaryAthlete([], previousLock);
+      expect(result).toEqual({ status: 'no-athletes' });
+    });
+
+    it('ignores a low-confidence box even as a continuity match', () => {
+      const previousLock = box({ x: 0.4, y: 0.4, width: 0.2, height: 0.2 });
+      const sameSpotButNoisy = box({
+        x: 0.41,
+        y: 0.41,
+        width: 0.2,
+        height: 0.2,
+        confidence: 0.1,
+      });
+
+      const result = selectPrimaryAthlete([sameSpotButNoisy], previousLock);
+
+      expect(result).toEqual({ status: 'no-athletes' });
+    });
+
+    it('is unaffected by continuity when previousLock is omitted (existing callers unchanged)', () => {
+      const a = box({ width: 0.1, height: 0.1 });
+      const b = box({ width: 0.5, height: 0.5 });
+      expect(selectPrimaryAthlete([a, b])).toEqual({ status: 'locked', athlete: b, index: 1 });
+    });
+  });
 });

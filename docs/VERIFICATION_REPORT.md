@@ -929,3 +929,50 @@ as of this entry. The previous fix also passed its own tests and still failed on
 test-suite passing is evidence the *internal logic* is self-consistent with the EXIF-derived
 model, not proof the model itself matches real iOS back-camera behaviour. This needs a real
 on-device back-camera test before it can be marked more than `⚠️ needs verification`.
+
+## 2026-08-16 — Real report: BLE stuck at 'connecting' forever on phone; multi-athlete lock "seems all random"; occlusion detection weak
+
+Human-reported, three items in one message:
+
+1. Back-camera rotation "seems better" (informal, not a full confirmation) after the swap fix
+   above.
+2. **BLE**: works from the Windows sandbox, but from the real phone the app is always stuck at
+   `'connecting'` — never reaches `'connected'` or surfaces an error. Explicitly asked for a
+   multi-subagent diagnosis + research push before attempting a fix. Diagnosis dispatched — see
+   the follow-up entry once findings land; not yet root-caused as of this entry.
+3. Detection accuracy drops under partial occlusion (legs cut off, only part of the body
+   visible). Requested research into improving this. Not yet actioned as of this entry —
+   dispatched alongside the BLE diagnosis.
+4. Multi-athlete selection "seems all random" — explicitly asked for a strategy that holds onto
+   one athlete rather than flipping, with "follow whoever's always been followed" as the
+   suggested approach (also floated, as a separate idea: "follow the person with the ball").
+
+**Fixed (item 4), same session**: `src/tracking/selectPrimaryAthlete.ts`'s `selectPrimaryAthlete`
+now takes an optional `previousLock`. If given, it looks for a continuation of that lock among
+the current frame's boxes (IoU primary signal, center-distance as a fallback for boxes shrunk by
+occlusion — see the function's own doc comment for the exact thresholds and reasoning) and keeps
+following it even when another box is now larger; the largest-area heuristic is now only used to
+acquire or re-acquire a lock, not to re-decide it from scratch every single frame. A NEW hook,
+`src/hooks/useLockedAthlete.ts`, owns the actual state (the previous lock, and a `LOCK_MEMORY_MS`
+= 1000ms grace window that keeps offering a stale lock position for re-matching through a brief
+total-occlusion gap) and is now the single call site for `selectPrimaryAthlete` —
+`TrackingOverlay.tsx` and `useGimbalControl.ts` previously each called `selectPrimaryAthlete`
+independently on the same frame's `boxes`, which is a second, structural reason selection could
+look random: the overlay and the actual BLE command could disagree about who was locked. Both
+now consume `useLockedAthlete`'s single output via `App.tsx`. 7 new tests in
+`selectPrimaryAthlete.test.ts` (continuity beats a larger box, IoU match on movement,
+center-distance match on an occlusion-shrunk box, fallback to fresh acquisition, fallback to
+`no-athletes`, low-confidence candidates still rejected, `previousLock`-omitted callers
+unchanged). `npm run typecheck` → zero errors, `npm test` → 110/110.
+
+**"Follow the person with the ball"**: NOT built. Confirmed the bundled model is full COCO (only
+filtered to `PERSON_CLASS_ID` in `decodeDetections.ts` today) so a "sports ball" class is
+technically available without swapping models, but reliable ball detection at filming distance
+with this small quantized model, and the box-to-person association logic, are both unresearched
+— scoped as a separate follow-up in `docs/PRD.md` §7 rather than half-built here.
+
+**What this does NOT prove**: whether continuity-locking actually reads as "stable" to a human
+watching real multi-athlete footage — untested on a phone as of this entry. Also does not address
+occlusion's ROOT cause (the model producing a smaller/lower-confidence/missing box in the first
+place) — only makes the selection layer more resilient to whatever imperfect boxes the model
+does produce. The detection-accuracy research (item 3) is the other half of this.
