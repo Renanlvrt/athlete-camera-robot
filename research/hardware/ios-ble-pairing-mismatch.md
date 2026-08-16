@@ -12,6 +12,11 @@
   from the real iPhone (see "What would settle this" below), or when a human confirms/denies
   that "Forget This Device" changes the behavior. Also revisit if the micro:bit firmware is
   reflashed again — a NEW re-flash creates a NEW opportunity for the same stale-bond mismatch.
+  **CONFIRMED 2026-08-16 (human report): "the forget thing worked!!!!"** — the developer used
+  iOS Settings > Bluetooth > Forget This Device on the micro:bit entry, and the app's BLE
+  connection (with the `CONNECT_TIMEOUT_MS` fix from the same day) then succeeded. Upgrading this
+  hypothesis's confidence to **high** — this is now a real hardware result, not inference, see
+  `testing/REAL_HARDWARE_TEST_LOG.md`.
 - **Sources:**
   - https://tech.microbit.org/software/runtime/ (DAL/CODAL overview)
   - https://github.com/lancaster-university/microbit-v2-samples/blob/master/codal.ble.json

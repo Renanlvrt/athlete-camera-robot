@@ -24,6 +24,31 @@ file exists to prevent.
 
 ---
 
+## 2026-08-16 (later) — BLE connect-timeout fix confirmed: "Forget This Device" + timeout fix = connects
+
+- **Ran:** The phone app (build `31968575854`, the connect-timeout fix build), after the user
+  went to iOS Settings > Bluetooth > found the micro:bit entry > "Forget This Device", then
+  relaunched the app and tried connecting again.
+- **Hardware present:** micro:bit (V2, MakeCode firmware), iPhone, no PCA9685/servos.
+- **Result:** ✅ worked — "the forget thing worked!!!!"
+- **What happened:** Before this, the app was stuck at `'connecting'` forever (see the
+  `react-native-ble-plx` connect-timeout fix in `docs/VERIFICATION_REPORT.md`'s 2026-08-16
+  (later) entry). After forgetting the device in iOS Settings and retrying through the app, it
+  connected successfully. Confirms BOTH the code fix (a stalled attempt now has a chance to
+  retry/succeed rather than hanging on one dead attempt forever) AND the root-cause hypothesis
+  (a stale iOS Bluetooth bond from the micro:bit's earlier MicroPython-firmware life) — see
+  `research/hardware/ios-ble-pairing-mismatch.md`, confidence upgraded to high.
+- **Numbers:** Not measured (no timing captured).
+- **Surprises:** Confirms attempting to connect to a custom unencrypted BLE peripheral directly
+  via iOS Settings (rather than through an app) reliably fails with a generic "tried to connect,
+  see if it's reachable" error, independent of whether the app-level connection would succeed —
+  Settings is not a valid diagnostic for this class of device (see chat discussion 2026-08-16;
+  not yet written up as its own research file).
+- **Follow-up:** `src/ble/useBleConnection.ts` / `src/ble/index.md` status should move toward
+  `✅ verified` for the connect path specifically — reconnect/drop behavior (the retry-race fix)
+  is still unconfirmed and should stay `⚠️`. Update `src/ble/index.md` in the same change as this
+  log entry.
+
 ## 2026-08-16 — Power bank auto-shutoff on the micro:bit alone (human-reported)
 
 - **Ran:** Nothing formal — the user's normal bench setup (micro:bit + power bank) while
