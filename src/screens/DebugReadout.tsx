@@ -53,7 +53,11 @@ export function DebugReadout({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 110,
+    // 150, not a rounder-looking 110/120: CameraControls.tsx's record button
+    // cluster (status text + 72px button, anchored at its OWN bottom: 40)
+    // extends up to roughly bottom: 136 — this needs to clear that with
+    // margin, not just avoid an exact collision.
+    bottom: 150,
     left: 0,
     right: 0,
     alignItems: 'center',
