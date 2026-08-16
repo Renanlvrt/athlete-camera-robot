@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 17 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 19 times |
 
-## Status: ✅ verified green, 17/17 runs, most recently 2026-08-16 (BLE connect-timeout + occlusion tolerance)
+## Status: ✅ verified green, 19/19 runs, most recently 2026-08-16 (orientation diagnostic overlay)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -66,6 +66,18 @@ same run.
   starting a new connection attempt, closing the race that caused it; the same class of bug was
   also fixed in the Python sandbox's `BleSender`, which now polls `client.is_connected` instead
   of inferring connection state from write success/failure): success in 9m11s, auto-triggered.
+- Run `31976197144` (commit `e6bf477`, on top of `a0c5757` — real report: front camera box wrong
+  again, back camera detecting nothing at all, right after the previous two fixes shipped.
+  Isolated via the webcam harness (developer-confirmed "extremely accurate" on both normal and
+  mirrored captures) to be iOS-only code, not the shared decode/selection logic. Fixed one real,
+  separate bug found by code review — `useAthleteDetection.ts`'s aspect-ratio value used to latch
+  on the FIRST camera used and never update after a front/back toggle. Shipped a temporary
+  on-screen `DebugReadout` (camera position, raw `Frame.orientation`, mirror flag, detection
+  count, aspect ratio) instead of re-deriving the rotation math a third time): success, auto-
+  triggered. Same 14.3 MB. Downloaded and inspected directly: valid zip, Mach-O executable and
+  `Info.plist` both present. **This is the build to install next** — read the on-screen debug
+  line for both cameras and report the values back; see `docs/VERIFICATION_REPORT.md`'s matching
+  2026-08-16 entry.
 - Run `31962301870` (commit `13d020a` — back-camera box-rotation RE-fix: the 2026-08-14 fix's
   `orientBox()` had its `'left'`/`'right'` case formulas swapped with each other, confirmed
   broken on a real phone; re-derived from VisionCamera's iOS `CameraOrientation`->EXIF-tag
@@ -86,10 +98,10 @@ same run.
   if the phone still doesn't reach `'connected'` after this build, try iOS Settings > Bluetooth >
   "Forget This Device" for the micro:bit before assuming the fix failed.
 
-All seventeen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
+All nineteen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
 valid zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable
 present, `Info.plist` is a parseable Apple binary property list. **First attempt succeeded on
-all seventeen runs** — none of the "likely first failures" predicted below have occurred yet.
+all nineteen runs** — none of the "likely first failures" predicted below have occurred yet.
 Full detail in `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical
