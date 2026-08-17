@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 19 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 20 times |
 
-## Status: ✅ verified green, 19/19 runs, most recently 2026-08-16 (orientation diagnostic overlay)
+## Status: ✅ verified green, 20/20 runs, most recently 2026-08-17 (aspect-ratio fix from real diagnostic data)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -75,9 +75,19 @@ same run.
   on-screen `DebugReadout` (camera position, raw `Frame.orientation`, mirror flag, detection
   count, aspect ratio) instead of re-deriving the rotation math a third time): success, auto-
   triggered. Same 14.3 MB. Downloaded and inspected directly: valid zip, Mach-O executable and
-  `Info.plist` both present. **This is the build to install next** — read the on-screen debug
-  line for both cameras and report the values back; see `docs/VERIFICATION_REPORT.md`'s matching
-  2026-08-16 entry.
+  `Info.plist` both present. Real diagnostic data came back from this build — see the next run.
+- Run `31981477498` (commit `f511608` — using the real `DebugReadout` numbers (back:
+  `orient=left ar=0.56`, front: `orient=right ar=1.78`), found the front/back aspect ratio was
+  genuinely wrong: 0.56 and 1.78 are reciprocals, proving the front/back sensors relate to
+  "portrait" oppositely, so one orientation-based width/height swap rule can't be right for both.
+  Fixed by removing the inference: `app.json` locks portrait, so `frameAspectRatio` is now always
+  `min(width,height)/max(width,height)` — correct by construction, not by trusting camera-specific
+  `Frame.orientation` behavior): success, auto-triggered. Same 14.3 MB. Downloaded and inspected
+  directly: valid zip, Mach-O executable and `Info.plist` both present. **This is the build to
+  install next** — read the debug line again for both cameras and report back whether the boxes
+  are now reasonably sized/positioned; the box's own (x,y) rotation math (`orientBox`) is
+  UNCHANGED by this fix, so back camera's zero-detection symptom may still be present. See
+  `docs/VERIFICATION_REPORT.md`'s 2026-08-17 entry.
 - Run `31962301870` (commit `13d020a` — back-camera box-rotation RE-fix: the 2026-08-14 fix's
   `orientBox()` had its `'left'`/`'right'` case formulas swapped with each other, confirmed
   broken on a real phone; re-derived from VisionCamera's iOS `CameraOrientation`->EXIF-tag
@@ -98,10 +108,10 @@ same run.
   if the phone still doesn't reach `'connected'` after this build, try iOS Settings > Bluetooth >
   "Forget This Device" for the micro:bit before assuming the fix failed.
 
-All nineteen produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
+All twenty produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
 valid zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable
 present, `Info.plist` is a parseable Apple binary property list. **First attempt succeeded on
-all nineteen runs** — none of the "likely first failures" predicted below have occurred yet.
+all twenty runs** — none of the "likely first failures" predicted below have occurred yet.
 Full detail in `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical
