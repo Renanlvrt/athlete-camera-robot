@@ -8,9 +8,9 @@ bypassing EAS Build's paid-account requirement. Full rationale: `docs/PRD.md` §
 
 | Name | Type | Responsibility (one line) | Status |
 |------|------|----------------------------|--------|
-| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 20 times |
+| `build-ios-unsigned.yml` | file | `npm ci` → typecheck → `expo prebuild` → `xcodebuild archive` (unsigned) → zip → artifact | ✅ verified — ran successfully 21 times |
 
-## Status: ✅ verified green, 20/20 runs, most recently 2026-08-17 (aspect-ratio fix from real diagnostic data)
+## Status: ✅ verified green, 21/21 runs, most recently 2026-08-17 (raw-vs-corrected box A/B diagnostic)
 
 Triggered four times via `gh workflow run` / an automatic `push` trigger:
 - Run `31288776388` (commit `1176a1e`, pre-CV/BLE-deps): success in 5m19s.
@@ -83,11 +83,21 @@ same run.
   Fixed by removing the inference: `app.json` locks portrait, so `frameAspectRatio` is now always
   `min(width,height)/max(width,height)` — correct by construction, not by trusting camera-specific
   `Frame.orientation` behavior): success, auto-triggered. Same 14.3 MB. Downloaded and inspected
-  directly: valid zip, Mach-O executable and `Info.plist` both present. **This is the build to
-  install next** — read the debug line again for both cameras and report back whether the boxes
-  are now reasonably sized/positioned; the box's own (x,y) rotation math (`orientBox`) is
-  UNCHANGED by this fix, so back camera's zero-detection symptom may still be present. See
-  `docs/VERIFICATION_REPORT.md`'s 2026-08-17 entry.
+  directly: valid zip, Mach-O executable and `Info.plist` both present. Real report came back:
+  the aspect-ratio fix alone didn't fix it — see the next run.
+- Run `31983560357` (commit `e5075d5` — real report after the aspect-ratio fix: horizontal
+  real-world motion shows up as VERTICAL motion in both the on-screen box AND the gimbal
+  correction sent to the micro:bit, proving the underlying `PersonBox` coordinates themselves are
+  wrong, not just their rendering. Re-derived `orientBox`'s rotation math a second, independent
+  way and got the same formula both times — ruling out an obvious arithmetic mistake and raising
+  a new hypothesis (the pipeline may already deliver rotation-corrected coordinates upstream,
+  making `orientBox` a double-rotation). Rather than guess a fourth formula, shipped
+  `rawUncorrectedBoxes` — every detection decoded with NO rotation/mirror applied — and a dashed
+  red comparison box in `TrackingOverlay.tsx` drawn alongside the normal one): success,
+  auto-triggered. Same 14.3 MB. Downloaded and inspected directly: valid zip, Mach-O executable
+  and `Info.plist` both present. **This is the build to install next** — walk left/right and
+  report which box (solid yellow = corrected, dashed red = raw/uncorrected) actually tracks real
+  motion correctly. See `docs/VERIFICATION_REPORT.md`'s 2026-08-17 (later) entry.
 - Run `31962301870` (commit `13d020a` — back-camera box-rotation RE-fix: the 2026-08-14 fix's
   `orientBox()` had its `'left'`/`'right'` case formulas swapped with each other, confirmed
   broken on a real phone; re-derived from VisionCamera's iOS `CameraOrientation`->EXIF-tag
@@ -108,10 +118,10 @@ same run.
   if the phone still doesn't reach `'connected'` after this build, try iOS Settings > Bluetooth >
   "Forget This Device" for the micro:bit before assuming the fix failed.
 
-All twenty produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
+All twenty-one produced a real `unsigned-app-ipa` artifact, downloaded and inspected locally: a
 valid zip, `Payload/athletecamerarobot.app/` present, `athletecamerarobot` Mach-O executable
 present, `Info.plist` is a parseable Apple binary property list. **First attempt succeeded on
-all twenty runs** — none of the "likely first failures" predicted below have occurred yet.
+all twenty-one runs** — none of the "likely first failures" predicted below have occurred yet.
 Full detail in `docs/VERIFICATION_REPORT.md`.
 
 **Not verified by this**: whether the app actually launches/runs correctly on a physical
