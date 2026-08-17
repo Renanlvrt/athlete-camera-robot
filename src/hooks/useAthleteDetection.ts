@@ -102,6 +102,25 @@ export interface AthleteDetectionResult {
    * real hardware — see `src/tracking/decodeDetections.ts`.
    */
   readonly rawOrientation: BufferOrientation | undefined;
+  /**
+   * The SAME detections as `boxes`, but with NO rotation correction and NO
+   * mirror correction applied — i.e. exactly what the model output, decoded
+   * with `decodeDetections`' defaults. TEMPORARY DIAGNOSTIC (2026-08-16,
+   * later still): after three straight rounds of the rotation math
+   * (`orientBox`) looking correct on paper and being wrong on-device — most
+   * recently a real report that horizontal motion is showing up as vertical
+   * motion on screen AND in the gimbal-correction sent to the micro:bit —
+   * guessing a fourth formula isn't the move. Drawing this alongside the
+   * normal (corrected) box lets the developer see directly which one
+   * actually tracks real left/right motion correctly, which tells us whether
+   * `orientBox` needs to be REMOVED (if this raw box is the one that's
+   * correct — meaning the pipeline was never actually delivering rotated
+   * coordinates in the first place) or just has its formula direction wrong
+   * (if neither is right, or the corrected one is right) — see
+   * `src/screens/TrackingOverlay.tsx`. Delete alongside `DebugReadout.tsx`
+   * once orientation is confirmed correct.
+   */
+  readonly rawUncorrectedBoxes: readonly PersonBox[];
 }
 
 /**
@@ -124,6 +143,7 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
   });
 
   const [boxes, setBoxes] = useState<readonly PersonBox[]>([]);
+  const [rawUncorrectedBoxes, setRawUncorrectedBoxes] = useState<readonly PersonBox[]>([]);
   const [frameAspectRatio, setFrameAspectRatio] = useState<number | undefined>(undefined);
   const [rawOrientation, setRawOrientation] = useState<BufferOrientation | undefined>(undefined);
   const hasSetAspectRatio = useRef(false);
@@ -152,6 +172,9 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
       orientation: BufferOrientation,
     ) => {
       setBoxes(decodeDetections(rawBoxes, rawClasses, rawScores, { isMirrored, orientation }));
+      // No orientation/isMirrored — the raw, untransformed decode. See this
+      // field's own doc comment in AthleteDetectionResult above.
+      setRawUncorrectedBoxes(decodeDetections(rawBoxes, rawClasses, rawScores));
       setRawOrientation(orientation);
     },
     [isMirrored],
@@ -228,5 +251,13 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
     status = 'ready';
   }
 
-  return { status, error, boxes, frameOutput, frameAspectRatio, rawOrientation };
+  return {
+    status,
+    error,
+    boxes,
+    frameOutput,
+    frameAspectRatio,
+    rawOrientation,
+    rawUncorrectedBoxes,
+  };
 }

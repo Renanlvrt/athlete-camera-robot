@@ -1129,10 +1129,55 @@ degenerate (inverted min/max) coordinates for real detections on this specific d
 `decodeDetections`' `width > 0 && height > 0` guard would silently drop, presenting as "no
 detections" even if the model found someone. Not confirmed.
 
-**New tool, still being set up**: installed `pymobiledevice3` (pure-Python, cross-platform
-libimobiledevice reimplementation — works on Windows without a Mac) to enable direct screenshot
-capture from the developer's iPhone over the existing USB cable, at the developer's own
-suggestion ("I give you access to my phone camera and maybe you can see it live?"). Confirmed
-`usbmux list` sees the device over USB; `developer dvt screenshot` requires the phone unlocked
-(returned "Device is password protected" while locked) — not yet captured a working screenshot
-as of this entry, in progress.
+**New tool, abandoned after a real attempt**: installed `pymobiledevice3` (pure-Python,
+cross-platform libimobiledevice reimplementation) to enable direct screenshot capture from the
+developer's iPhone over USB, at the developer's own suggestion. Confirmed `usbmux list` sees the
+device; `developer dvt screenshot` correctly reported "Device is password protected" while
+locked, and progressed to prompting a real "Trust This Computer?" dialog once unlocked (developer
+confirmed tapping Trust, Developer Mode was already on) — but `validate_pairing()` then failed
+consistently on every retry, including after an explicit `lockdown unpair`/`pair` cycle (which
+itself hit an unrelated library bug — a `TypeError` serializing a `None` pair record). Diagnosed
+as a likely compatibility gap between this library version and the device's very new iOS version
+(26.6) rather than anything fixable quickly from this session. Abandoned in favor of the
+already-working text-report loop rather than continuing to debug a third-party library's internal
+pairing protocol.
+
+## 2026-08-17 — Real report: aspect-ratio fix didn't fix the actual bug; real horizontal motion shows up as vertical (box AND gimbal correction); shipped a raw-vs-corrected A/B diagnostic instead of a fourth guess
+
+Human-reported, after installing the aspect-ratio-fix build: "The more left the more the box goes
+up... When the person goes to the left of the screen, then the box goes up for some reasons (and
+so does the micro-bit shown)." The micro:bit's LED-simulator direction being affected identically
+to the on-screen box is important: it proves this is not a rendering-only bug in
+`frameLayout.ts`/`TrackingOverlay.tsx` (which only affects pixel placement) — the underlying
+`PersonBox.x`/`.y` values themselves, consumed identically by the overlay AND
+`computeGimbalCorrection`/BLE, are wrong. Also reported: no dashed center-line on the phone,
+unlike the Windows webcam sandbox (not yet explained — plausibly the same intermittent-detection
+symptom rather than a separate bug, since the line only draws when a box is currently locked).
+
+Re-derived `orientBox`'s `'right'` case rotation math a second, independent way (a direct
+rotation-matrix computation, not just the EXIF-row/column heuristic used the first time) and got
+the exact same formula both times — meaning the rotation-DIRECTION math itself is not an obvious
+arithmetic mistake. This raises a different, more likely hypothesis: the pipeline may already be
+delivering rotation-corrected coordinates upstream of `orientBox` (e.g. via the GPU resizer or
+VisionCamera's own frame handling), and applying `orientBox`'s rotation on top of that
+double-rotates them — which would produce exactly this "axis got swapped" symptom without the
+formula itself being arithmetically wrong.
+
+**Decision: stop re-deriving formulas from reasoning alone — three straight rounds of "looks
+correct on paper, wrong on-device" is enough.** Instead, shipped a real A/B diagnostic:
+`useAthleteDetection.ts` now also decodes and exposes `rawUncorrectedBoxes` — the exact same
+detections with NO rotation or mirror correction applied (a second, parameter-less call to
+`decodeDetections`) — and `TrackingOverlay.tsx` draws the largest one as a dashed red box
+alongside the normal corrected (yellow) box. The next phone test will show directly, by watching
+which box actually follows real left/right motion correctly, whether `orientBox` needs to be
+removed entirely (if the raw box is the one that's correct) or has a specific, now-diagnosable
+direction error (if neither box is right). `npm run typecheck` → zero errors, `npm test` →
+112/112 (this diagnostic touches no existing test-covered logic — `rawUncorrectedBoxes` is a
+second, unmodified call to the already-tested `decodeDetections`).
+
+**What this does NOT do**: fix the actual bug. This is instrumentation, explicitly not a fourth
+guess dressed up as one. The user's stated frustration ("I don't see why this is a big deal") is
+noted — the underlying task (detect a person, draw a box, measure deviation from center) is
+simple in principle; getting a phone camera's raw sensor orientation right in practice has proven
+to be the hard, error-prone part, three times now, which is exactly why this round changes
+approach from re-deriving to directly observing.

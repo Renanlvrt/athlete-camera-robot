@@ -12,7 +12,7 @@ import type { CameraFacing } from '../hooks/useCameraSetup';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
 import type { RecordingStatus, SaveStatus } from '../hooks/useVideoRecording';
 import type { BleConnectionState } from '../ble/useBleConnection';
-import type { PrimaryAthleteResult } from '../tracking/types';
+import type { PersonBox, PrimaryAthleteResult } from '../tracking/types';
 import type { BufferOrientation } from '../tracking/decodeDetections';
 import { CameraControls } from './CameraControls';
 import { TrackingOverlay } from './TrackingOverlay';
@@ -40,6 +40,8 @@ interface CameraPreviewScreenProps {
   readonly rawOrientation: BufferOrientation | undefined;
   /** Count of every detection this frame, before selection — for `DebugReadout` (TEMPORARY). */
   readonly boxCount: number;
+  /** Uncorrected detections, for `TrackingOverlay`'s raw-vs-corrected diagnostic box (TEMPORARY). */
+  readonly rawUncorrectedBoxes: readonly PersonBox[];
 }
 
 /**
@@ -73,6 +75,7 @@ export function CameraPreviewScreen({
   cameraPosition,
   rawOrientation,
   boxCount,
+  rawUncorrectedBoxes,
 }: CameraPreviewScreenProps) {
   return (
     <View style={styles.container}>
@@ -82,7 +85,12 @@ export function CameraPreviewScreen({
         isActive={true}
         outputs={[frameOutput, videoOutput]}
       />
-      <TrackingOverlay primary={primary} frameAspectRatio={frameAspectRatio} status={detectionStatus} />
+      <TrackingOverlay
+        primary={primary}
+        frameAspectRatio={frameAspectRatio}
+        status={detectionStatus}
+        rawUncorrectedBoxes={rawUncorrectedBoxes}
+      />
       <BleStatusBadge state={bleState} onRetry={onRetryBle} />
       <DebugReadout
         cameraPosition={cameraPosition}

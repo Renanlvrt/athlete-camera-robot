@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 
 import { colors } from '../theme/colors';
 import { computeTrackingReadout } from '../tracking/computeTrackingReadout';
-import type { PrimaryAthleteResult } from '../tracking/types';
+import type { PersonBox, PrimaryAthleteResult } from '../tracking/types';
 import type { DetectionStatus } from '../hooks/useAthleteDetection';
 import { clampBadgePosition, computeLineStyle, mapFrameBoxToViewRect } from './frameLayout';
 
@@ -18,6 +18,17 @@ interface TrackingOverlayProps {
   readonly primary: PrimaryAthleteResult;
   readonly frameAspectRatio: number | undefined;
   readonly status: DetectionStatus;
+  /**
+   * TEMPORARY DIAGNOSTIC (2026-08-16, later still) — every detection with NO
+   * rotation/mirror correction applied, straight from
+   * `useAthleteDetection.ts`'s `rawUncorrectedBoxes`. Draws the largest one
+   * as a dashed red box alongside the normal (corrected, yellow) one, so a
+   * real-device test can show directly which one actually follows real
+   * left/right motion correctly — see that field's own doc comment for why.
+   * Delete alongside `DebugReadout.tsx`/this prop once `orientBox` is
+   * confirmed correct.
+   */
+  readonly rawUncorrectedBoxes: readonly PersonBox[];
 }
 
 const COMPASS_LABELS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
@@ -44,6 +55,7 @@ export function TrackingOverlay({
   primary,
   frameAspectRatio,
   status,
+  rawUncorrectedBoxes,
 }: TrackingOverlayProps): React.ReactElement {
   const [viewSize, setViewSize] = useState({ width: 0, height: 0 });
 
@@ -62,6 +74,24 @@ export function TrackingOverlay({
       : undefined;
 
   const badgeRect = boxRect !== undefined ? clampBadgePosition(boxRect, viewSize) : undefined;
+
+  // TEMPORARY DIAGNOSTIC — see this component's `rawUncorrectedBoxes` doc
+  // comment. Largest-by-area raw box, same simple heuristic as the old
+  // pre-continuity selectPrimaryAthlete — this is throwaway comparison code,
+  // not the real selection logic.
+  let largestRawBox: PersonBox | undefined;
+  let largestRawArea = -1;
+  for (const box of rawUncorrectedBoxes) {
+    const area = box.width * box.height;
+    if (area > largestRawArea) {
+      largestRawArea = area;
+      largestRawBox = box;
+    }
+  }
+  const rawBoxRect =
+    largestRawBox !== undefined && frameAspectRatio !== undefined && viewSize.width > 0
+      ? mapFrameBoxToViewRect(largestRawBox, frameAspectRatio, viewSize)
+      : undefined;
 
   // Dashed line from the box's center to the screen's center — a visual
   // "here's the correction vector" cue that's readable at a glance even
@@ -152,6 +182,26 @@ export function TrackingOverlay({
           {Math.round(primary.status === 'locked' ? primary.athlete.confidence * 100 : 0)}%
         </Text>
       )}
+      {/* TEMPORARY DIAGNOSTIC — dashed red box, NO rotation/mirror correction.
+          See TrackingOverlayProps.rawUncorrectedBoxes' doc comment. */}
+      {rawBoxRect !== undefined && (
+        <>
+          <View
+            style={[
+              styles.rawBox,
+              {
+                left: rawBoxRect.x,
+                top: rawBoxRect.y,
+                width: rawBoxRect.width,
+                height: rawBoxRect.height,
+              },
+            ]}
+          />
+          <Text style={[styles.rawBoxLabel, { left: rawBoxRect.x, top: Math.max(0, rawBoxRect.y - 20) }]}>
+            RAW (uncorrected)
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -170,6 +220,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 3,
     borderRadius: 8,
+  },
+  // TEMPORARY DIAGNOSTIC styles — see rawUncorrectedBoxes' doc comment.
+  rawBox: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#ff0000',
+    borderRadius: 8,
+  },
+  rawBoxLabel: {
+    position: 'absolute',
+    color: '#ff0000',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
   centerLine: {
     position: 'absolute',

@@ -66,6 +66,7 @@ export default function App() {
           cameraPosition={cameraPosition}
           rawOrientation={detection.rawOrientation}
           boxCount={detection.boxes.length}
+          rawUncorrectedBoxes={detection.rawUncorrectedBoxes}
         />
       );
   }
