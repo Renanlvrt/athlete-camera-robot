@@ -1099,3 +1099,40 @@ tracking logic, only wiring + a new presentational component).
 **What this does NOT prove**: the actual root cause of either camera's regression — that's
 exactly what's still unknown and why the diagnostic build exists. The webcam result is real
 evidence about WHERE the bug isn't, not a fix.
+
+## 2026-08-17 — Real diagnostic data received; a genuine aspect-ratio bug found and fixed from it; started a live phone-screen inspection tool
+
+**Real data, human-reported from the `DebugReadout` build**: back camera → `orient=left
+mirrored=N boxes=0 ar=0.56`; front camera → `orient=right mirrored=Y boxes=1 ar=1.78`. First real
+numbers this project has had for `Frame.orientation` on either camera.
+
+**Aspect ratio bug found and fixed, directly from this data (not another guess)**: `ar=0.56`
+(back) is correct — that's a portrait 9:16 ratio, matching a portrait-locked screen. `ar=1.78`
+(front) is wrong — that's LANDSCAPE 16:9, fed into a portrait viewport's `'cover'`-fit math in
+`frameLayout.ts`, which would produce exactly the reported symptom (huge, badly-scaled,
+mispositioned boxes). Both numbers came from the same code path
+(`useAthleteDetection.ts`'s `publishFrameSize`, `isRotated ? height/width : width/height`,
+`isRotated` = `orientation === 'left' | 'right'`) — and 0.56 and 1.78 are reciprocals of each
+other, meaning the front and back camera sensors' raw buffers relate to "portrait" OPPOSITELY,
+so one fixed swap rule (based on left/right) can't be correct for both. Fixed by removing the
+inference entirely: since `app.json` locks `"orientation": "portrait"`, the displayed shape is
+ALWAYS portrait by construction — `frameAspectRatio` is now always
+`min(width, height) / max(width, height)`, which is correct regardless of how a given camera's
+raw buffer relates to `Frame.orientation`. `npm run typecheck` → zero errors, `npm test` →
+112/112 (this fix touches no tracking-folder logic).
+
+**What this does NOT fix**: the box's own (x, y) rotation math (`orientBox`, in
+`decodeDetections.ts`) is completely unchanged by this — it's a separate code path from the
+aspect-ratio computation. Back camera's `boxes=0` (zero detections, not just misplaced ones) is
+still unexplained; a live hypothesis is that `orientBox`'s `'left'` case is still producing
+degenerate (inverted min/max) coordinates for real detections on this specific device, which
+`decodeDetections`' `width > 0 && height > 0` guard would silently drop, presenting as "no
+detections" even if the model found someone. Not confirmed.
+
+**New tool, still being set up**: installed `pymobiledevice3` (pure-Python, cross-platform
+libimobiledevice reimplementation — works on Windows without a Mac) to enable direct screenshot
+capture from the developer's iPhone over the existing USB cable, at the developer's own
+suggestion ("I give you access to my phone camera and maybe you can see it live?"). Confirmed
+`usbmux list` sees the device over USB; `developer dvt screenshot` requires the phone unlocked
+(returned "Device is password protected" while locked) — not yet captured a working screenshot
+as of this entry, in progress.

@@ -42,12 +42,19 @@ import type { PersonBox } from '../tracking/types';
  * are RAW SENSOR BUFFER dimensions, though, and are not automatically
  * rotated to match display orientation (`Frame.orientation`, see
  * `node_modules/react-native-vision-camera/lib/specs/instances/Frame.nitro.d.ts`).
- * `publishFrameSize` below corrects for this by swapping width/height when
- * `orientation` is `'left'`/`'right'` before computing the aspect ratio that
- * `src/screens/frameLayout.ts` uses to place the overlay box — getting this
- * wrong is the most likely explanation for a wildly oversized/mispositioned
- * box, since `frameLayout.ts`'s `'cover'`-fit math amplifies any aspect-ratio
- * error into a large positioning error.
+ * `publishFrameSize` below corrects for this — as of 2026-08-16 (later), by
+ * always taking `min(width, height) / max(width, height)`, which is
+ * guaranteed correct for the aspect ratio `src/screens/frameLayout.ts` uses
+ * to place the overlay box PRECISELY BECAUSE `app.json` locks
+ * `"orientation": "portrait"` (the display shape is always portrait, no
+ * exceptions) — not by trying to infer a width/height swap from
+ * `Frame.orientation`, which a real report showed relates to "portrait"
+ * OPPOSITELY for the front vs back camera on this device (front and back
+ * produced reciprocal aspect ratios, 1.78 and 0.56, from the same
+ * orientation-based swap rule). Getting this aspect ratio wrong is the most
+ * likely explanation for a wildly oversized/mispositioned box, since
+ * `frameLayout.ts`'s `'cover'`-fit math amplifies any aspect-ratio error
+ * into a large positioning error — confirmed exactly this on 2026-08-16.
  *
  * FRONT CAMERA: the caller passes `cameraPosition` — the RESOLVED
  * `CameraDevice.position` once known (falling back to the requested
@@ -150,17 +157,32 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
     [isMirrored],
   );
 
-  const publishFrameSize = useCallback((width: number, height: number, isRotated: boolean) => {
+  const publishFrameSize = useCallback((width: number, height: number) => {
     if (hasSetAspectRatio.current || width <= 0 || height <= 0) return;
     hasSetAspectRatio.current = true;
-    // A 'left'/'right' orientation means the raw buffer is rotated 90°
-    // relative to how it will actually be displayed — swap the dimensions so
-    // the aspect ratio matches what's on screen, not the raw sensor buffer.
+    // FIXED 2026-08-16 (later): this used to decide whether to swap
+    // width/height based on `frame.orientation === 'left' | 'right'`,
+    // assuming both cameras' raw buffers relate to "portrait" the same way.
+    // A real on-device report disproved that: back camera (orientation
+    // 'left') correctly produced ar=0.56 (portrait) via that swap, but front
+    // camera (orientation 'right') produced ar=1.78 (LANDSCAPE) via the
+    // exact same swap — the two numbers are reciprocals of each other,
+    // meaning the front and back sensors' raw buffers relate to "portrait"
+    // OPPOSITELY, so one fixed swap rule can't be right for both.
+    //
+    // Sidesteps needing to trust that relationship at all: `app.json` locks
+    // `"orientation": "portrait"`, so the DISPLAYED shape is always portrait
+    // (width < height) by construction, regardless of camera or
+    // `Frame.orientation` quirks — so just always divide the smaller raw
+    // dimension by the larger one. This is grounded in something verified
+    // independently (the portrait lock), not another assumption about
+    // camera-sensor rotation.
+    //
     // The box's own (x, y) rotation is handled separately, in
     // decodeDetections.ts's orientBox (see publishDetections below) — this
     // function only corrects the aspect ratio used for frameLayout.ts's
     // 'cover'-fit scale.
-    setFrameAspectRatio(isRotated ? height / width : width / height);
+    setFrameAspectRatio(Math.min(width, height) / Math.max(width, height));
   }, []);
 
   const model = plugin.state === 'loaded' ? plugin.model : undefined;
@@ -171,8 +193,7 @@ export function useAthleteDetection(cameraPosition: CameraPosition): AthleteDete
     pixelFormat: 'yuv',
     onFrame: (frame) => {
       'worklet';
-      const isRotated = frame.orientation === 'left' || frame.orientation === 'right';
-      runOnJS(publishFrameSize)(frame.width, frame.height, isRotated);
+      runOnJS(publishFrameSize)(frame.width, frame.height);
 
       if (resizer == null || model == null) {
         frame.dispose();
